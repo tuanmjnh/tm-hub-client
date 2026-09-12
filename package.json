@@ -1,0 +1,46 @@
+{
+  "name": "tm-hub-client",
+  "version": "1.0.0",
+  "description": "Unified TypeScript SDK for TM-Hub (IAM, Configs, Media, Notifications & Audit Logs)",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "pnpm build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "tm-hub",
+    "iam",
+    "auth",
+    "sdk",
+    "client",
+    "rbac",
+    "audit-logs",
+    "notifications",
+    "cloudinary"
+  ],
+  "author": "tuanmjnh",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.2"
+  }
+}
