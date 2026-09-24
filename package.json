@@ -18,10 +18,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/prepare-dist.mjs",
     "dev": "tsup --watch",
     "prepublishOnly": "pnpm build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "login": "npm login",
+    "publish:lib": "npm run build && npm publish ./dist",
+    "git:cache": "git rm -r --cached . && git add ."
   },
   "keywords": [
     "tm-hub",
