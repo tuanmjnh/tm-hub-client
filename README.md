@@ -11,15 +11,21 @@ Unified, isomorphic TypeScript Client SDK for **TM-Hub** (Centralized IAM, Remot
 - **Dual ESM & CommonJS Build**: Seamlessly works in Node.js, Electron, Nuxt, Vite, and modern browsers.
 - **First-Class TypeScript Support**: 100% typed request payloads, responses, models, and error structures.
 - **Automatic Token & Tenant Injection**: Automatically injects `X-App-Id` and `Authorization: Bearer <token>`.
+- **Silent Refresh (optional)**: Pass `getRefreshToken` + `onTokensRefreshed` to auto-retry once on 401.
+- **Client-side Capability Helpers**: `hub.capabilities.has()` / `canAccessApp()` / `load()` with dual-read aliases (`media.write`↔`media.upload`, `logs.read`↔`apps.logs.read`).
 - **Complete Module Coverage**:
-  - `auth`: Login, Register, Me, Refresh token, Logout, Dynamic Route Tree.
-  - `configs`: Get Public Configs, Get App Configs, Update App Configs.
-  - `media`: Cloudinary Upload Signatures, Folder Management, Asset Deletion & Renaming.
-  - `notifications`: List In-App Notifications, Mark as Read, Mark All Read, Batch Delete, Web Push Subscriptions, Trigger Notifications.
-  - `users`: List, Create, Update, and Delete app users.
+  - `auth`: Login, Register, Me, Permissions (JWT claims), Update Profile, Change Password, Refresh token, Logout, Dynamic Route Tree, List/Revoke Sessions.
+  - `apps`: List, Get, Create, Update, Delete (batch), Reorder.
+  - `configs`: Get Public Configs, Get App Public Configs, Get App Configs, Update App Configs.
+  - `media`: Cloudinary Upload Signatures, Folder Management, Asset Listing/Deletion & Renaming.
+  - `notifications`: List In-App Notifications, Mark as Read, Mark All Read, Batch Delete, Web Push Subscribe/Unsubscribe, Trigger Notifications.
+  - `users`: List (cursor pagination), Create, Update, and Delete app users.
   - `roles`: Role & Permission Matrix CRUD operations.
   - `routes`: Dynamic navigation system route management.
+  - `permissions`: Read-only global capability catalog (§6.4).
   - `logs` / `auditLogs`: Query dedicated MongoDB audit history logs.
+
+Hard delete endpoints (`apps.delete`, `users.delete`, `roles.delete`) require a **root** token on the TM-Hub server. Routes are soft-deleted server-side.
 
 ---
 
@@ -94,12 +100,15 @@ export const useHub = () => {
   return {
     client,
     auth: client.auth,
+    apps: client.apps,
     configs: client.configs,
     media: client.media,
     notifications: client.notifications,
     users: client.users,
     roles: client.roles,
     routes: client.routes,
+    permissions: client.permissions,
+    capabilities: client.capabilities,
     logs: client.logs
   }
 }
