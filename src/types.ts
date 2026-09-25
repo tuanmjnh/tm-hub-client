@@ -37,6 +37,10 @@ export type Capability =
   | 'platform.crossapp.read'
   | 'platform.crossapp.write'
   | 'platform.audit.read'
+  | 'connections.read'
+  | 'connections.write'
+  | 'imports.read'
+  | 'imports.write'
   /** @deprecated use `media.upload` */
   | 'media.write'
   /** @deprecated use `users.create` / `users.update` / `users.delete` */
@@ -303,4 +307,91 @@ export interface HubResourceListParams extends HubListParams {
   folder?: string
   max_results?: number
   next_cursor?: string
+}
+
+// ==========================================
+// Connections (per-app provider credentials — v1.23)
+// ==========================================
+export type HubConnectionMode = 'manual' | 'oauth'
+
+export type HubConnectionStatus = 'connected' | 'error'
+
+export interface HubConnectionField {
+  key: string
+  label: string
+  type: 'text' | 'password'
+  required: boolean
+}
+
+/** Public view of a stored connection — secrets are never included. */
+export interface HubConnection {
+  id: string
+  provider: string
+  mode: HubConnectionMode
+  status: HubConnectionStatus
+  label: string | null
+  config: Record<string, unknown>
+  hasSecrets: boolean
+  expiresAt: string | null
+  connectedBy: string | null
+  lastTestAt: string | null
+  lastTestOk: boolean | null
+  connectedAt: string
+  updatedAt: string
+}
+
+/** Provider definition merged with the app's connection (from GET /connections). */
+export interface HubConnectionProvider {
+  key: string
+  name: string
+  description: string
+  icon: string
+  mode: HubConnectionMode
+  fields?: HubConnectionField[]
+  scopes?: string[]
+  connection: HubConnection | null
+}
+
+export interface HubConnectionTestResult {
+  ok: boolean
+  message?: string
+}
+
+export interface HubOAuthStartResponse {
+  authUrl: string
+}
+
+// ==========================================
+// Data Import (v1.24)
+// ==========================================
+export type HubImportTargetKey = 'configs' | 'users' | 'routes'
+
+export interface HubImportTarget {
+  key: HubImportTargetKey
+  identifierField: string
+  requiredFields: string[]
+  optionalFields: string[]
+}
+
+export interface HubImportRowResult {
+  index: number
+  ok: boolean
+  action: 'create' | 'update' | null
+  identifier?: string
+  error?: string
+}
+
+export interface HubImportRunResult {
+  total: number
+  created: number
+  updated: number
+  failed: number
+  results: HubImportRowResult[]
+}
+
+export type HubImportRow = Record<string, unknown>
+
+export interface HubSheetValues {
+  range: string
+  values: string[][]
 }

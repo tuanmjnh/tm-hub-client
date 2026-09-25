@@ -24,7 +24,16 @@ import type {
   HubResourceListParams,
   HubPermissionCatalogResponse,
   HubAuthPermissions,
-  Capability
+  Capability,
+  HubConnectionProvider,
+  HubConnectionTestResult,
+  HubOAuthStartResponse,
+  HubImportTarget,
+  HubImportTargetKey,
+  HubImportRowResult,
+  HubImportRunResult,
+  HubImportRow,
+  HubSheetValues
 } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
@@ -560,6 +569,103 @@ export class HubClient {
       const target = appId || this.appId
       return this.request<HubPermissionCatalogResponse>(`/api/v1/apps/${target}/permissions`, {
         method: 'GET'
+      })
+    }
+  }
+
+  // ==========================================
+  // MODULE: Connections (per-app provider credentials)
+  // ==========================================
+  public readonly connections = {
+    /** Provider definitions merged with this app's connection status (secrets never returned). */
+    list: (appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubConnectionProvider[]>>(`/api/v1/apps/${target}/connections`, {
+        method: 'GET'
+      })
+    },
+    /** Manual credentials connect (e.g. Cloudinary) — secrets are encrypted server-side. */
+    saveManual: (provider: string, values: Record<string, string>, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<{ connection: HubConnectionProvider['connection'], test: HubConnectionTestResult }>>(
+        `/api/v1/apps/${target}/connections/manual`,
+        { method: 'POST', body: { provider, values } as any }
+      )
+    },
+    /**
+     * Quick connect: no credentials sent — the server reads this app's configs
+     * (app_configs, managed on the Configs page), verifies them live and stores
+     * the connection row. Currently supported by providers flagged `quick` (cloudinary).
+     */
+    quick: (provider: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<{ connection: HubConnectionProvider['connection'], test: HubConnectionTestResult }>>(
+        `/api/v1/apps/${target}/connections/quick`,
+        { method: 'POST', body: { provider } as any }
+      )
+    },
+    /** Test a stored connection (updates last_test_* server-side). */
+    test: (provider: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubConnectionTestResult>>(`/api/v1/apps/${target}/connections/test`, {
+        method: 'POST',
+        body: { provider } as any
+      })
+    },
+    /** Disconnect + delete stored credentials. */
+    disconnect: (provider: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<void>>(`/api/v1/apps/${target}/connections/${provider}`, {
+        method: 'DELETE'
+      })
+    },
+    /**
+     * OAuth start: returns the provider consent URL (state carries app_id).
+     * Open it in a popup/window; the fixed callback posts
+     * `{ type: 'tm-hub-oauth', status }` back to the opener.
+     */
+    oauthStart: (provider: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubOAuthStartResponse>>(`/api/v1/oauth/${provider}/auth`, {
+        method: 'POST',
+        body: { app_id: target } as any
+      })
+    }
+  }
+
+  // ==========================================
+  // MODULE: Data Import (CSV/JSON/paste/Sheets → configs/users/routes)
+  // ==========================================
+  public readonly imports = {
+    /** Target definitions (identifier + required/optional fields). */
+    targets: (appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubImportTarget[]>>(`/api/v1/apps/${target}/import`, {
+        method: 'GET'
+      })
+    },
+    /** Dry-run: validate rows and detect create/update per row. */
+    preview: (target: HubImportTargetKey, rows: HubImportRow[], appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubImportRowResult[]>>(`/api/v1/apps/${app}/import/preview`, {
+        method: 'POST',
+        body: { target, rows } as any
+      })
+    },
+    /** Apply rows (upsert, per-row error isolation). */
+    run: (target: HubImportTargetKey, rows: HubImportRow[], appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubImportRunResult>>(`/api/v1/apps/${app}/import/run`, {
+        method: 'POST',
+        body: { target, rows } as any
+      })
+    },
+    /** Read a Google Sheet server-side — the access token never leaves tm-hub. */
+    fetchSheet: (spreadsheetId: string, range: string, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubSheetValues>>(`/api/v1/apps/${app}/import/sheets`, {
+        method: 'GET',
+        params: { spreadsheet_id: spreadsheetId, range }
       })
     }
   }
