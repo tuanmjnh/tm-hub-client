@@ -33,7 +33,42 @@ import type {
   HubImportRowResult,
   HubImportRunResult,
   HubImportRow,
-  HubSheetValues
+  HubSheetValues,
+  HubIntrospectResponse,
+  HubAdminPasswordSetResponse,
+  HubForgotPasswordRequest,
+  HubResetPasswordRequest,
+  HubOAuthProvider,
+  HubOAuthProviderInfo,
+  HubOAuthProvidersResponse,
+  HubOAuthLoginResponse,
+  HubOAuthLinkRequest,
+  HubOAuthLinkResponse,
+  HubImportSource,
+  HubImportTargetExtended,
+  HubImportSourceConfig,
+  HubImportTargetConfig,
+  HubImportReferenceField,
+  HubImportValidationRule,
+  HubImportTransformer,
+  HubImportColumn,
+  HubImportPreview,
+  HubImportError,
+  HubImportWarning,
+  HubImportJob,
+  HubImportOptions,
+  HubImportTemplate,
+  HubImportJobStats,
+  HubQueueStats,
+  HubImportJobListParams,
+  HubImportJobListItem,
+  HubPaginatedImportJobs,
+  HubImportValidationResult,
+  HubImportResult,
+  HubExportJob,
+  HubExportTemplate,
+  HubExportOptions,
+  HubExportJobListParams
 } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
@@ -227,6 +262,18 @@ export class HubClient {
         body: data as any
       })
     },
+    forgotPassword: (data: HubForgotPasswordRequest) => {
+      return this.request<HubResponse<void>>('/api/v1/auth/forgot-password', {
+        method: 'POST',
+        body: { ...data, appId: this.appId } as any
+      })
+    },
+    resetPassword: (data: HubResetPasswordRequest) => {
+      return this.request<HubResponse<void>>('/api/v1/auth/reset-password', {
+        method: 'POST',
+        body: { ...data, appId: this.appId } as any
+      })
+    },
     refresh: async (refreshToken: string) => {
       const res = await this.request<HubResponse<HubRefreshResponse>>('/api/v1/auth/refresh', {
         method: 'POST',
@@ -261,6 +308,43 @@ export class HubClient {
           id: idParam,
           all: options?.all ? 'true' : undefined
         }
+      })
+    },
+    /** Validate a token without being the token holder (for external services). */
+    introspect: (token: string) => {
+      return this.request<HubResponse<HubIntrospectResponse>>('/api/v1/auth/introspect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    },
+
+    // ==========================================
+    // OAuth (v1.25)
+    // ==========================================
+    /** List enabled OAuth providers for an app. */
+    oauthProviders: (appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubOAuthProvidersResponse>(`/api/v1/auth/oauth/providers`, {
+        method: 'GET',
+        params: { appId: target }
+      })
+    },
+
+    /** Start OAuth flow — returns authUrl to open in popup. */
+    oauthStart: (provider: HubOAuthProvider, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubOAuthStartResponse>>(`/api/v1/auth/oauth/${provider}/start`, {
+        method: 'POST',
+        body: { appId: target } as any
+      })
+    },
+
+    /** Link OAuth account to current user (requires auth). */
+    oauthLink: (provider: HubOAuthProvider, code: string, state: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubOAuthLinkResponse>>(`/api/v1/auth/oauth/link`, {
+        method: 'POST',
+        body: { provider, code, state, appId: target } as any
       })
     }
   }
@@ -303,6 +387,11 @@ export class HubClient {
       return this.request<HubResponse<void>>('/api/v1/apps/reorder', {
         method: 'POST',
         body: { ids: orderedIds } as any
+      })
+    },
+    rotateSecret: (appId: string) => {
+      return this.request<HubResponse<{ id: string, secretKey: string }>>(`/api/v1/apps/${appId}/rotate-secret`, {
+        method: 'POST'
       })
     }
   }
@@ -465,6 +554,37 @@ export class HubClient {
       return this.request<HubResponse<void>>(`/api/v1/apps/${this.appId}/users`, {
         method: 'DELETE',
         params: { id: idParam }
+      })
+    },
+    /** Admin: set/reset a user's password (no current password required). */
+    adminSetPassword: (userId: string, password: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubAdminPasswordSetResponse>>(`/api/v1/apps/${target}/users/${userId}/password`, {
+        method: 'POST',
+        body: { password } as any
+      })
+    },
+    /** Admin: generate a temporary password for a user. */
+    adminResetPassword: (userId: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubAdminPasswordSetResponse>>(`/api/v1/apps/${target}/users/${userId}/password`, {
+        method: 'POST',
+        body: { generateTemp: true } as any
+      })
+    },
+    /** Admin: list all sessions for a specific user. */
+    getSessions: (userId: string, params?: HubListParams, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubSession[]>>(`/api/v1/apps/${target}/users/${userId}/sessions`, {
+        method: 'GET',
+        params: params as any
+      })
+    },
+    /** Admin: revoke a specific session of a user. */
+    revokeSession: (userId: string, sessionId: string, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<void>>(`/api/v1/apps/${target}/users/${userId}/sessions/${sessionId}`, {
+        method: 'DELETE'
       })
     }
   }
@@ -644,20 +764,87 @@ export class HubClient {
         method: 'GET'
       })
     },
+    /** Get target config with full schema (fields, validation, transformers, samples). */
+    target: (target: HubImportTargetExtended, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubImportTargetConfig>>(`/api/v1/apps/${app}/import/targets/${target}`, {
+        method: 'GET'
+      })
+    },
     /** Dry-run: validate rows and detect create/update per row. */
-    preview: (target: HubImportTargetKey, rows: HubImportRow[], appId?: string) => {
+    preview: (target: HubImportTargetExtended, rows: HubImportRow[], appId?: string) => {
       const app = appId || this.appId
       return this.request<HubResponse<HubImportRowResult[]>>(`/api/v1/apps/${app}/import/preview`, {
         method: 'POST',
         body: { target, rows } as any
       })
     },
+    /** Preview with full source config and options (supports google, csv, paste, json). */
+    previewWithConfig: (target: HubImportTargetExtended, source: HubImportSource, rows: HubImportRow[], sourceConfig?: HubImportSourceConfig, options?: Partial<HubImportOptions>, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<{ validation: HubImportValidationResult, preview: HubImportPreview }>>(`/api/v1/apps/${app}/import/preview`, {
+        method: 'POST',
+        body: { target, source, rows, sourceConfig, options } as any
+      })
+    },
     /** Apply rows (upsert, per-row error isolation). */
-    run: (target: HubImportTargetKey, rows: HubImportRow[], appId?: string) => {
+    run: (target: HubImportTargetExtended, rows: HubImportRow[], appId?: string) => {
       const app = appId || this.appId
       return this.request<HubResponse<HubImportRunResult>>(`/api/v1/apps/${app}/import/run`, {
         method: 'POST',
         body: { target, rows } as any
+      })
+    },
+    /** Execute import with full options, preview, and source config (sync). */
+    execute: (target: HubImportTargetExtended, source: HubImportSource, rows: HubImportRow[], sourceConfig?: HubImportSourceConfig, options?: Partial<HubImportOptions>, preview?: HubImportPreview, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubImportResult>>(`/api/v1/apps/${app}/import/execute`, {
+        method: 'POST',
+        body: { target, source, rows, sourceConfig, options, preview } as any
+      })
+    },
+    /** Schedule an import job (async, queued). */
+    schedule: (target: HubImportTargetExtended, source: HubImportSource, sourceConfig: HubImportSourceConfig, options?: Partial<HubImportOptions>, priority?: 'high' | 'normal' | 'low', scheduledAt?: Date, maxAttempts?: number, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<{ jobId: string, status: string }>>(`/api/v1/apps/${app}/import/schedule`, {
+        method: 'POST',
+        body: { target, source, sourceConfig, options, priority, scheduledAt: scheduledAt?.toISOString(), maxAttempts } as any
+      })
+    },
+    /** List import jobs with pagination and filters. */
+    listJobs: (params?: HubImportJobListParams, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubImportJobListItem[]> & { meta?: HubPaginatedImportJobs['meta'] }>(`/api/v1/apps/${app}/import/jobs`, {
+        method: 'GET',
+        params: params as any
+      })
+    },
+    /** Get import job detail. */
+    getJob: (jobId: string, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubImportJob>>(`/api/v1/apps/${app}/import/jobs/${jobId}`, {
+        method: 'GET'
+      })
+    },
+    /** Cancel a pending/running import job. */
+    cancel: (jobId: string, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<{ removed: boolean }>>(`/api/v1/apps/${app}/import/jobs/${jobId}`, {
+        method: 'DELETE'
+      })
+    },
+    /** Get queue statistics. */
+    getStats: (appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<HubQueueStats>>(`/api/v1/apps/${app}/import/stats`, {
+        method: 'GET'
+      })
+    },
+    /** Download error log for a job. */
+    getJobLog: (jobId: string, appId?: string) => {
+      const app = appId || this.appId
+      return this.request<HubResponse<string>>(`/api/v1/apps/${app}/import/jobs/${jobId}/download`, {
+        method: 'GET'
       })
     },
     /** Read a Google Sheet server-side — the access token never leaves tm-hub. */
@@ -666,6 +853,141 @@ export class HubClient {
       return this.request<HubResponse<HubSheetValues>>(`/api/v1/apps/${app}/import/sheets`, {
         method: 'GET',
         params: { spreadsheet_id: spreadsheetId, range }
+      })
+    },
+    /** Import Templates */
+    templates: {
+      /** List import templates. */
+      list: (target?: HubImportTargetExtended, isSystem?: boolean, page?: number, limit?: number, appId?: string) => {
+        const app = appId || this.appId
+        return this.request<HubResponse<HubImportTemplate[]> & { meta?: HubPaginatedImportJobs['meta'] }>(`/api/v1/apps/${app}/import/templates`, {
+          method: 'GET',
+          params: { target, is_system: isSystem, page, limit } as any
+        })
+      },
+      /** Create a new import template. */
+      create: (target: HubImportTargetExtended, name: string, columns: HubImportColumn[], description?: string, mappings?: Record<string, string>, defaultValues?: Record<string, any>, validationRules?: HubImportValidationRule[], isSystem?: boolean, appId?: string) => {
+        const app = appId || this.appId
+        return this.request<HubResponse<HubImportTemplate>>(`/api/v1/apps/${app}/import/templates`, {
+          method: 'POST',
+          body: { target, name, columns, description, mappings, defaultValues, validationRules, isSystem } as any
+        })
+      },
+      /** Get a template by ID. */
+      get: (templateId: string, appId?: string) => {
+        const app = appId || this.appId
+        return this.request<HubResponse<HubImportTemplate>>(`/api/v1/apps/${app}/import/templates/${templateId}`, {
+          method: 'GET'
+        })
+      },
+      /** Update a template. */
+      update: (templateId: string, data: Partial<Pick<HubImportTemplate, 'name' | 'description' | 'columns' | 'mappings' | 'defaultValues' | 'validationRules'>>, appId?: string) => {
+        const app = appId || this.appId
+        return this.request<HubResponse<HubImportTemplate>>(`/api/v1/apps/${app}/import/templates/${templateId}`, {
+          method: 'PUT',
+          body: data as any
+        })
+      },
+      /** Delete a template. */
+      delete: (templateId: string, appId?: string) => {
+        const app = appId || this.appId
+        return this.request<HubResponse<{ message: string }>>(`/api/v1/apps/${app}/import/templates/${templateId}`, {
+          method: 'DELETE'
+        })
+      },
+      /** Download a template as CSV. */
+      download: (templateId: string, format: 'csv' | 'json' = 'csv', appId?: string) => {
+        const app = appId || this.appId
+        return this.request<HubResponse<string>>(`/api/v1/apps/${app}/import/templates/${templateId}/download`, {
+          method: 'GET',
+          params: { format }
+        })
+      }
+    }
+  }
+
+  // ==========================================
+  // MODULE: Export Data (Phase E — export jobs & templates)
+  // ==========================================
+  public readonly export = {
+    /** Start an export job — job runs inline and is returned completed/failed. */
+    start: (module: string, options: HubExportOptions) => {
+      return this.request<HubResponse<HubExportJob>>(`/api/v1/apps/${this.appId}/modules/${encodeURIComponent(module)}/export`, {
+        method: 'POST',
+        body: { options } as any
+      })
+    },
+    /** List export jobs (modules filtered server-side by capability; `mine` scopes to current user). */
+    jobs: (params?: HubExportJobListParams) => {
+      return this.request<HubResponse<HubExportJob[]>>(`/api/v1/apps/${this.appId}/export/jobs`, {
+        method: 'GET',
+        params: {
+          module: params?.module,
+          mine: params?.mine ? 'true' : undefined,
+          limit: params?.limit,
+          offset: params?.offset
+        } as any
+      })
+    },
+    job: (jobId: string) => {
+      return this.request<HubResponse<HubExportJob>>(`/api/v1/apps/${this.appId}/export/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'GET'
+      })
+    },
+    deleteJob: (jobId: string) => {
+      return this.request<HubResponse<{ id: string, deleted: boolean }>>(`/api/v1/apps/${this.appId}/export/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'DELETE'
+      })
+    },
+    /** Direct download URL — caller must attach Authorization header. */
+    downloadUrl: (jobId: string) =>
+      `${this.baseUrl}/api/v1/apps/${this.appId}/export/jobs/${encodeURIComponent(jobId)}/download`,
+    /** Download exported file as Blob (auto refresh token on 401). */
+    download: async (jobId: string): Promise<Blob> => {
+      const url = this.export.downloadUrl(jobId)
+      const doFetch = (): Promise<Response> => {
+        const headers = new Headers({ 'X-App-Id': this.appId })
+        return Promise.resolve(this.getAccessToken?.()).then((token) => {
+          if (token) headers.set('Authorization', `Bearer ${token}`)
+          return this.customFetch(url, { headers })
+        })
+      }
+      let response = await doFetch()
+      if (response.status === 401 && this.getRefreshToken) {
+        const refreshed = await this.tryRefreshTokens()
+        if (refreshed) response = await doFetch()
+      }
+      if (!response.ok) {
+        let errorBody: any
+        try { errorBody = await response.json() } catch { errorBody = { message: response.statusText } }
+        const error = new Error(errorBody.message || errorBody.statusMessage || `Download failed with status ${response.status}`)
+        ;(error as any).statusCode = response.status
+        ;(error as any).data = errorBody
+        throw error
+      }
+      return response.blob()
+    },
+    templates: (module?: string) => {
+      return this.request<HubResponse<HubExportTemplate[]>>(`/api/v1/apps/${this.appId}/export/templates`, {
+        method: 'GET',
+        params: { module } as any
+      })
+    },
+    createTemplate: (data: { module: string, name: string, description?: string, options: HubExportOptions, isDefault?: boolean }) => {
+      return this.request<HubResponse<HubExportTemplate>>(`/api/v1/apps/${this.appId}/export/templates`, {
+        method: 'POST',
+        body: data as any
+      })
+    },
+    updateTemplate: (templateId: string, data: { name?: string, description?: string, options?: HubExportOptions, isDefault?: boolean }) => {
+      return this.request<HubResponse<HubExportTemplate>>(`/api/v1/apps/${this.appId}/export/templates/${encodeURIComponent(templateId)}`, {
+        method: 'PUT',
+        body: data as any
+      })
+    },
+    deleteTemplate: (templateId: string) => {
+      return this.request<HubResponse<{ id: string, deleted: boolean }>>(`/api/v1/apps/${this.appId}/export/templates/${encodeURIComponent(templateId)}`, {
+        method: 'DELETE'
       })
     }
   }

@@ -19,20 +19,33 @@ export type Capability =
   | 'apps.logs.read'
   | 'configs.read'
   | 'configs.write'
+  | 'configs.export'
   | 'media.read'
   | 'media.upload'
   | 'media.delete'
+  | 'media.export'
   | 'notifications.read'
   | 'notifications.send'
   | 'notifications.manage'
+  | 'notifications.export'
+  | 'mail.send'
+  | 'mail.manage'
+  | 'mail.analytics.read'
   | 'users.read'
   | 'users.create'
   | 'users.update'
   | 'users.delete'
+  | 'users.export'
+  | 'users.import'
   | 'roles.read'
   | 'roles.manage'
   | 'routes.read'
   | 'routes.manage'
+  | 'permissions.read'
+  | 'permissions.create'
+  | 'permissions.update'
+  | 'permissions.delete'
+  | 'permissions.manage'
   | 'platform.apps.manage'
   | 'platform.crossapp.read'
   | 'platform.crossapp.write'
@@ -100,6 +113,18 @@ export interface HubProfileUpdate {
 export interface HubPasswordChange {
   currentPassword: string
   newPassword: string
+}
+
+export interface HubForgotPasswordRequest {
+  email: string
+  appId?: string
+}
+
+export interface HubResetPasswordRequest {
+  email: string
+  token: string
+  password: string
+  appId: string
 }
 
 export interface HubSession {
@@ -269,6 +294,22 @@ export interface HubUser {
   platform?: string
 }
 
+export interface HubIntrospectResponse {
+  valid: boolean
+  reason?: string
+  sub?: string
+  appId?: string
+  email?: string
+  name?: string
+  roles?: string[]
+  permissions?: string[]
+  allowedRoutes?: string[]
+}
+
+export interface HubAdminPasswordSetResponse {
+  temporaryPassword?: string
+}
+
 export interface HubListParams {
   limit?: number
   cursor?: string | number
@@ -362,6 +403,47 @@ export interface HubOAuthStartResponse {
 }
 
 // ==========================================
+// OAuth (v1.25)
+// ==========================================
+export type HubOAuthProvider = 'google' | 'github' | 'microsoft'
+
+export interface HubOAuthProviderInfo {
+  key: HubOAuthProvider
+  name: string
+  enabled: boolean
+  scopes: string[]
+}
+
+export interface HubOAuthProvidersResponse {
+  success: boolean
+  data: HubOAuthProviderInfo[]
+}
+
+export interface HubOAuthLoginResponse {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  user: HubAuthUser
+  isNewUser: boolean
+}
+
+export interface HubOAuthLinkRequest {
+  provider: HubOAuthProvider
+  code: string
+  state: string
+  appId?: string
+}
+
+export interface HubOAuthLinkResponse {
+  success: boolean
+  data: {
+    linked: boolean
+    provider: HubOAuthProvider
+    email: string
+  }
+}
+
+// ==========================================
 // Data Import (v1.24)
 // ==========================================
 export type HubImportTargetKey = 'configs' | 'users' | 'routes'
@@ -389,9 +471,314 @@ export interface HubImportRunResult {
   results: HubImportRowResult[]
 }
 
-export type HubImportRow = Record<string, unknown>
-
 export interface HubSheetValues {
   range: string
   values: string[][]
+}
+
+// ==========================================
+// Data Import Extended (v1.26+)
+// ==========================================
+export type HubImportSource = 'google' | 'csv' | 'paste' | 'json'
+export type HubImportTargetExtended =
+  | 'users' | 'roles' | 'routes' | 'permissions'
+  | 'products' | 'categories' | 'variants' | 'attributes'
+  | 'orders' | 'customers' | 'segments'
+  | 'inventory' | 'warehouses' | 'suppliers' | 'purchase_orders'
+  | 'content' | 'pages' | 'content_categories'
+  | 'custom'
+
+export interface HubImportSourceConfig {
+  source: HubImportSource
+  google?: { spreadsheetId: string; range?: string; accessToken: string }
+  csv?: File
+  paste?: string
+  json?: any[]
+}
+
+export interface HubImportTargetConfig {
+  key: HubImportTargetExtended
+  label: string
+  description: string
+  icon: string
+  model: string
+  identifierField: string
+  localeFields: string[]
+  referenceFields: HubImportReferenceField[]
+  requiredFields: string[]
+  optionalFields: string[]
+  localizedFields: string[]
+  validationRules: HubImportValidationRule[]
+  transformers: HubImportTransformer[]
+  sampleHeaders: string[]
+  sampleRows: string[][]
+}
+
+export interface HubImportReferenceField {
+  field: string
+  targetModel: string
+  targetField: string
+  lookupField: string
+  isArray: boolean
+  required: boolean
+}
+
+export interface HubImportValidationRule {
+  field: string
+  required?: boolean
+  type?: 'string' | 'number' | 'email' | 'url' | 'date' | 'boolean'
+  pattern?: RegExp
+  min?: number
+  max?: number
+  custom?: (value: any, row: any) => string | null
+}
+
+export type HubImportTransformer =
+  | { type: 'localize'; fields: string[] }
+  | { type: 'slugify'; fields: string[]; sourceField: string }
+  | { type: 'reference'; field: string; targetModel: string; lookupField: string }
+  | { type: 'parse'; field: string; parser: 'json' | 'csv' | 'attributes' }
+  | { type: 'default'; field: string; value: any }
+  | { type: 'custom'; field: string; fn: (value: any, row: any) => any }
+
+export interface HubImportColumn {
+  accessorKey: string
+  header: string
+  type: 'text' | 'number' | 'select' | 'badge' | 'localized' | 'reference'
+  required?: boolean
+  options?: { value: string; label: string }[]
+  referenceConfig?: { model: string; displayField: string; valueField: string }
+}
+
+export interface HubImportPreview {
+  items: HubImportRow[]
+  errors: HubImportError[]
+  warnings: HubImportWarning[]
+  summary: {
+    totalRows: number
+    validRows: number
+    errorCount: number
+    warningCount: number
+    estimatedNew: number
+    estimatedUpdate: number
+  }
+}
+
+export interface HubImportRow {
+  [key: string]: any
+  _rowIndex: number
+  _hasError: boolean
+  _hasWarning: boolean
+  _isNew: boolean
+  _matchedId?: string
+}
+
+export interface HubImportError {
+  row: number
+  field: string
+  message: string
+  severity: 'error' | 'warning'
+  value?: any
+}
+
+export interface HubImportWarning {
+  row: number
+  field: string
+  message: string
+  value?: any
+}
+
+export interface HubImportJob {
+  id: string
+  appId: string
+  userId: string
+  target: HubImportTargetExtended
+  source: HubImportSource
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  options: HubImportOptions
+  preview: HubImportPreview
+  stats: {
+    total: number
+    created: number
+    updated: number
+    failed: number
+    skipped: number
+  }
+  fileUrl?: string
+  errorLog?: string
+  createdAt: Date
+  startedAt?: Date
+  completedAt?: Date
+}
+
+export interface HubImportOptions {
+  target: HubImportTargetExtended
+  source: HubImportSource
+  locale: string
+  autoFixSlug: boolean
+  skipErrors: boolean
+  dryRun: boolean
+  batchSize: number
+  notifyOnComplete: boolean
+}
+
+export interface HubImportTemplate {
+  id: string
+  appId: string
+  target: HubImportTargetExtended
+  name: string
+  description?: string
+  columns: HubImportColumn[]
+  mappings: Record<string, string>
+  defaultValues: Record<string, any>
+  validationRules: HubImportValidationRule[]
+  isSystem: boolean
+  version: number
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface HubImportJobStats {
+  total: number
+  created: number
+  updated: number
+  failed: number
+  skipped: number
+  rowsProcessed: number
+  durationMs: number
+}
+
+export interface HubQueueStats {
+  high: { waiting: number; active: number; completed: number; failed: number; delayed: number }
+  normal: { waiting: number; active: number; completed: number; failed: number; delayed: number }
+  low: { waiting: number; active: number; completed: number; failed: number; delayed: number }
+  scheduled: { waiting: number; active: number; completed: number; failed: number; delayed: number }
+  dead: { waiting: number; active: number; completed: number; failed: number; delayed: number }
+  total: { waiting: number; active: number; completed: number; failed: number; delayed: number }
+}
+
+export interface HubImportJobListParams {
+  status?: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'
+  priority?: 'high' | 'normal' | 'low'
+  target?: HubImportTargetExtended
+  page?: number
+  limit?: number
+  from?: Date | string
+  to?: Date | string
+}
+
+export interface HubImportJobListItem {
+  id: string
+  appId: string
+  userId: string
+  target: HubImportTargetExtended
+  source: HubImportSource
+  status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'
+  priority: 'high' | 'normal' | 'low'
+  attemptsMade: number
+  maxAttempts: number
+  scheduledAt?: Date
+  createdAt: Date
+  processedAt?: Date
+  completedAt?: Date
+  failedReason?: string
+  stats?: HubImportJobStats
+}
+
+export interface HubPaginatedImportJobs {
+  data: HubImportJobListItem[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
+export interface HubImportValidationResult {
+  valid: boolean
+  errors: HubImportError[]
+  warnings: HubImportWarning[]
+}
+
+export interface HubImportResult {
+  total: number
+  created: number
+  updated: number
+  failed: number
+  skipped: number
+  errors: HubImportError[]
+  results: Array<{
+    index: number
+    ok: boolean
+    action: 'create' | 'update' | null
+    identifier?: string
+    error?: string
+  }>
+}
+
+// ==========================================
+// Export Data (Phase E — tm-hub export jobs/templates)
+// ==========================================
+export type HubExportFormat = 'csv' | 'json' | 'xlsx'
+
+export type HubExportScope = 'page' | 'selected' | 'filtered' | 'all'
+
+export type HubExportJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
+export interface HubExportOptions {
+  format: HubExportFormat
+  scope: HubExportScope
+  fields?: string[]
+  filters?: Record<string, string | number | boolean>
+  sort?: Array<{ field: string; order: 'asc' | 'desc' }>
+  dateRange?: { from?: string; to?: string }
+  filename?: string
+  includeHeaders?: boolean
+  encoding?: 'utf-8' | 'utf-16le'
+  sheetName?: string
+  ids?: string[]
+  limit?: number
+  offset?: number
+}
+
+export interface HubExportJob {
+  id: string
+  appId: string
+  userId: string
+  module: string
+  status: HubExportJobStatus
+  format: HubExportFormat
+  scope: HubExportScope
+  options: HubExportOptions
+  totalRecords: number
+  processedRecords: number
+  fileUrl?: string
+  fileSize?: number
+  error?: string
+  createdAt: string
+  startedAt?: string
+  completedAt?: string
+  expiresAt: string
+}
+
+export interface HubExportTemplate {
+  id: string
+  appId: string
+  module: string
+  name: string
+  description?: string
+  options: HubExportOptions
+  isDefault: boolean
+  createdBy?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface HubExportJobListParams {
+  module?: string
+  mine?: boolean
+  limit?: number
+  offset?: number
 }
