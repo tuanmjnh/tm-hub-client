@@ -68,7 +68,12 @@ import type {
   HubExportJob,
   HubExportTemplate,
   HubExportOptions,
-  HubExportJobListParams
+  HubExportJobListParams,
+  HubTotpSetupResponse,
+  HubTotpVerifyResponse,
+  HubPasskeyInfo,
+  HubPasskeyRegisterStart,
+  HubPasskeyLoginStart
 } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
@@ -316,6 +321,99 @@ export class HubClient {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       })
+    },
+
+    // ==========================================
+    // Two-factor authentication (v1.26)
+    // ==========================================
+    /**
+     * Complete login after `auth.login()` returned `totpRequired`.
+     * Pass the 6-digit TOTP code (or an unused recovery code).
+     */
+    verifyTotp: async (pendingTotpToken: string, code: string) => {
+      const res = await this.request<HubResponse<HubAuthResponse>>('/api/v1/auth/totp/login', {
+        method: 'POST',
+        body: { pendingTotpToken, code, appId: this.appId } as any
+      })
+      this.rememberPermissions(res.data?.user?.permissions)
+      return res
+    },
+
+    /** Start 2FA setup — returns an otpauth QR code data URL (scan in an authenticator app). */
+    totpSetup: () => {
+      return this.request<HubResponse<HubTotpSetupResponse>>('/api/v1/auth/totp/setup', {
+        method: 'POST',
+        body: { appId: this.appId } as any
+      })
+    },
+
+    /** Confirm setup with a code — returns one-time recovery codes. */
+    totpVerify: (code: string) => {
+      return this.request<HubResponse<HubTotpVerifyResponse>>('/api/v1/auth/totp/verify', {
+        method: 'POST',
+        body: { code } as any
+      })
+    },
+
+    /** Disable 2FA — requires a valid code or an unused recovery code. */
+    totpDisable: (code: string) => {
+      return this.request<HubResponse<void>>('/api/v1/auth/totp/disable', {
+        method: 'POST',
+        body: { code } as any
+      })
+    },
+
+    // ==========================================
+    // Passkeys (v1.26)
+    // ==========================================
+    /** List the current user's registered passkeys. */
+    passkeyList: () => {
+      return this.request<HubResponse<HubPasskeyInfo[]>>('/api/v1/auth/passkey/list', {
+        method: 'GET',
+        params: { appId: this.appId }
+      })
+    },
+
+    /** WebAuthn registration step 1 — creation options for `navigator.credentials.create()`. */
+    passkeyRegisterStart: (username: string, displayName?: string) => {
+      return this.request<HubResponse<HubPasskeyRegisterStart>>('/api/v1/auth/passkey/register/start', {
+        method: 'POST',
+        body: { appId: this.appId, username, displayName: displayName || username } as any
+      })
+    },
+
+    /** WebAuthn registration step 2 — submit the PublicKeyCredential (JSON form). */
+    passkeyRegisterFinish: (credential: unknown) => {
+      return this.request<HubResponse<HubPasskeyInfo>>('/api/v1/auth/passkey/register/finish', {
+        method: 'POST',
+        body: { appId: this.appId, credential } as any
+      })
+    },
+
+    /** Remove a passkey by its credential id. */
+    passkeyDelete: (credentialId: string) => {
+      return this.request<HubResponse<void>>('/api/v1/auth/passkey/delete', {
+        method: 'DELETE',
+        params: { appId: this.appId, credentialId }
+      })
+    },
+
+    /** WebAuthn login step 1 — assertion options for `navigator.credentials.get()` (no auth required). */
+    passkeyLoginStart: () => {
+      return this.request<HubResponse<HubPasskeyLoginStart>>('/api/v1/auth/passkey/login/start', {
+        method: 'POST',
+        body: { appId: this.appId } as any
+      })
+    },
+
+    /** WebAuthn login step 2 — submit the assertion (JSON form); issues tokens on success. */
+    passkeyLoginFinish: async (credential: unknown) => {
+      const res = await this.request<HubResponse<HubAuthResponse>>('/api/v1/auth/passkey/login/finish', {
+        method: 'POST',
+        body: { appId: this.appId, credential } as any
+      })
+      this.rememberPermissions(res.data?.user?.permissions)
+      return res
     },
 
     // ==========================================

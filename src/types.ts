@@ -89,6 +89,12 @@ export interface HubMe {
   roles: string[]
   permissions: string[]
   allowedRoutes: string[]
+  /** 2FA state (v1.26). */
+  totpEnabled?: boolean
+  features?: {
+    passkey?: boolean
+    totp?: boolean
+  }
 }
 
 export interface HubAuthResponse {
@@ -96,6 +102,56 @@ export interface HubAuthResponse {
   refreshToken: string
   expiresIn: number
   user: HubAuthUser
+  /**
+   * Set when the account has two-factor authentication enabled:
+   * no tokens are issued yet — call `auth.verifyTotp()` with the code.
+   */
+  totpRequired?: true
+  pendingTotpToken?: string
+}
+
+/** Result of `auth.login()` — check `totpRequired` before using tokens. */
+export type HubLoginResult = HubAuthResponse
+
+export interface HubTotpSetupResponse {
+  qrDataUrl: string
+}
+
+export interface HubTotpVerifyResponse {
+  recoveryCodes: string[]
+}
+
+export interface HubPasskeyInfo {
+  id: string
+  /** WebAuthn credential id (base64url) — pass to `auth.passkeyDelete()`. */
+  credentialId: string
+  deviceName?: string
+  transports: string[]
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface HubPasskeyRegisterStart {
+  challenge: string
+  user: { id: string, name: string, displayName: string }
+  rp: { id: string, name: string }
+  pubKeyCredParams: Array<{ type: 'public-key', alg: number }>
+  timeout: number
+  attestation: 'none' | 'indirect' | 'direct'
+  authenticatorSelection: {
+    authenticatorAttachment?: 'platform' | 'cross-platform'
+    residentKey: 'required' | 'preferred' | 'discouraged'
+    requireResidentKey?: boolean
+    userVerification: 'required' | 'preferred' | 'discouraged'
+  }
+}
+
+export interface HubPasskeyLoginStart {
+  challenge: string
+  allowCredentials: Array<{ id: string, type: 'public-key', transports?: string[] }>
+  timeout: number
+  userVerification: 'required' | 'preferred' | 'discouraged'
+  rpId?: string
 }
 
 export interface HubRefreshResponse {
