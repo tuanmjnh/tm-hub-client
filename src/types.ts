@@ -838,3 +838,295 @@ export interface HubExportJobListParams {
   limit?: number
   offset?: number
 }
+
+// ==========================================
+// Mail (v1.0.2)
+// ==========================================
+export type HubMailAddress = string
+export type HubMailPriority = 'high' | 'normal' | 'low'
+export type HubMailTemplateStatus = 'draft' | 'published' | 'archived'
+
+export interface HubMailAttachmentInput {
+  filename: string
+  content?: string
+  path?: string
+  contentType?: string
+}
+
+export interface HubMailSendOptions {
+  from?: HubMailAddress
+  to: HubMailAddress | HubMailAddress[]
+  cc?: HubMailAddress[]
+  bcc?: HubMailAddress[]
+  replyTo?: HubMailAddress
+  subject: string
+  html?: string
+  text?: string
+  attachments?: HubMailAttachmentInput[]
+  headers?: Record<string, string>
+  tags?: string[]
+  metadata?: Record<string, string>
+  templateId?: string
+  templateData?: Record<string, unknown>
+}
+
+export interface HubMailScheduleOptions extends HubMailSendOptions {
+  scheduledAt: string
+  priority?: HubMailPriority
+}
+
+export interface HubMailSendResult {
+  success?: boolean
+  messageId?: string
+  error?: string
+  provider?: string
+  jobId?: string
+}
+
+export interface HubMailProviderInfo {
+  type: string
+  name: string
+  enabled?: boolean
+  configured?: boolean
+  [key: string]: unknown
+}
+
+export interface HubMailTemplateVariable {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'date' | 'currency' | 'url'
+  required: boolean
+  description?: string
+  default?: unknown
+}
+
+export interface HubMailTemplate {
+  id: string
+  appId: string
+  key: string
+  name: string
+  subject: string
+  preheader?: string
+  html: string
+  text?: string
+  layoutId?: string
+  variables: Record<string, HubMailTemplateVariable>
+  locale: string
+  status: HubMailTemplateStatus
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  publishedAt?: string
+}
+
+export interface HubMailTemplateListParams {
+  status?: HubMailTemplateStatus
+  locale?: string
+  key?: string
+  page?: number
+  limit?: number
+}
+
+export interface HubMailTemplateListResult {
+  templates: HubMailTemplate[]
+  total: number
+}
+
+export interface HubMailTemplateInput {
+  key: string
+  name: string
+  subject: string
+  preheader?: string
+  html: string
+  text?: string
+  layoutId?: string
+  variables?: Record<string, HubMailTemplateVariable>
+  locale?: string
+  status?: HubMailTemplateStatus
+}
+
+export interface HubMailTemplatePreview {
+  html: string
+  text: string
+  variables: Record<string, unknown>
+}
+
+export interface HubMailAnalyticsParams {
+  from?: string
+  to?: string
+}
+
+export interface HubMailAnalyticsSummary {
+  totalSent: number
+  totalDelivered: number
+  totalBounced: number
+  totalOpened: number
+  totalClicked: number
+  totalUnsubscribed: number
+  totalComplained: number
+  deliveryRate: number
+  openRate: number
+  clickRate: number
+  bounceRate: number
+  unsubscribeRate: number
+  complaintRate: number
+  period?: { from: string, to: string }
+}
+
+export interface HubMailTimeseriesPoint {
+  date: string
+  sent: number
+  delivered: number
+  bounced: number
+  opened: number
+  clicked: number
+  unsubscribed: number
+  complained: number
+}
+
+export interface HubMailTopTemplateStats {
+  templateId: string
+  templateKey: string
+  sent: number
+  openRate: number
+  clickRate: number
+}
+
+export interface HubMailTopDomainStats {
+  domain: string
+  sent: number
+  bounced: number
+  openRate: number
+}
+
+export interface HubMailEventQuery extends HubMailAnalyticsParams {
+  event?: string
+  templateId?: string
+  campaignId?: string
+  recipient?: string
+  tags?: string
+  page?: number
+  limit?: number
+}
+
+export interface HubMailAnalyticsEventsResult {
+  events?: unknown[]
+  pagination?: { page: number, limit: number, total?: number }
+  [key: string]: unknown
+}
+
+export interface HubMailQueueCounters {
+  waiting: number
+  active: number
+  completed: number
+  failed: number
+  delayed: number
+}
+
+export interface HubMailQueueStats {
+  high: HubMailQueueCounters
+  normal: HubMailQueueCounters
+  low: HubMailQueueCounters
+  scheduled: HubMailQueueCounters
+  dead: HubMailQueueCounters
+  total: HubMailQueueCounters
+}
+
+export interface HubMailQueueJob {
+  id: string
+  queue: string
+  state: string
+  attempts: number
+  maxAttempts: number
+  timestamp: number | null
+  processedOn: number | null
+  finishedOn: number | null
+  failedReason: string | null
+  summary: string
+}
+
+export interface HubMailQueueState {
+  enabled: boolean
+  stats: HubMailQueueStats | null
+  jobs: HubMailQueueJob[]
+}
+
+export type HubMailQueueAction = 'pause' | 'resume' | 'clean' | 'cancel'
+
+export interface HubMailQueueQuery {
+  start?: number
+  limit?: number
+  status?: string
+}
+
+export interface HubMailJobDetail {
+  id: string
+  status?: string
+  result?: unknown
+  attemptsMade?: number
+  createdAt?: string
+  processedAt?: string
+  failedReason?: string
+}
+
+export interface HubInboxAttachment {
+  id: string | null
+  filename: string
+  mimeType: string
+  size: number
+}
+
+export interface HubInboxItem {
+  id: string
+  threadId: string
+  snippet: string
+  labels: string[]
+  subject: string
+  from: string
+  date: string | null
+  unread: boolean
+  starred: boolean
+}
+
+export interface HubInboxDetail extends HubInboxItem {
+  to: string
+  bodyHtml: string
+  bodyText: string
+  attachments: HubInboxAttachment[]
+}
+
+export interface HubInboxThread {
+  id: string
+  snippet: string
+  messages: HubInboxDetail[]
+}
+
+export interface HubInboxProfile {
+  connected: boolean
+  email: string | null
+  messagesTotal: number
+  threadsTotal: number
+}
+
+export interface HubInboxMessagesResult {
+  items: HubInboxItem[]
+  nextPageToken: string | null
+}
+
+export interface HubInboxMessagesQuery {
+  q?: string
+  pageToken?: string
+  maxResults?: number
+}
+
+export interface HubInboxSendInput {
+  to: string
+  subject: string
+  body: string
+  threadId?: string
+}
+
+export interface HubInboxLabelsInput {
+  addLabelIds?: string[]
+  removeLabelIds?: string[]
+}

@@ -73,7 +73,34 @@ import type {
   HubTotpVerifyResponse,
   HubPasskeyInfo,
   HubPasskeyRegisterStart,
-  HubPasskeyLoginStart
+  HubPasskeyLoginStart,
+  HubMailProviderInfo,
+  HubMailSendOptions,
+  HubMailScheduleOptions,
+  HubMailSendResult,
+  HubMailTemplate,
+  HubMailTemplateInput,
+  HubMailTemplateListParams,
+  HubMailTemplatePreview,
+  HubMailAnalyticsParams,
+  HubMailAnalyticsSummary,
+  HubMailAnalyticsEventsResult,
+  HubMailTimeseriesPoint,
+  HubMailEventQuery,
+  HubMailTopDomainStats,
+  HubMailTopTemplateStats,
+  HubMailQueueQuery,
+  HubMailQueueState,
+  HubMailQueueAction,
+  HubMailJobDetail,
+  HubInboxProfile,
+  HubInboxItem,
+  HubInboxDetail,
+  HubInboxThread,
+  HubInboxMessagesQuery,
+  HubInboxMessagesResult,
+  HubInboxSendInput,
+  HubInboxLabelsInput
 } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
@@ -1087,6 +1114,210 @@ export class HubClient {
       return this.request<HubResponse<{ id: string, deleted: boolean }>>(`/api/v1/apps/${this.appId}/export/templates/${encodeURIComponent(templateId)}`, {
         method: 'DELETE'
       })
+    }
+  }
+
+  // ==========================================
+  // MODULE: Mail (send/schedule, templates, inbox, analytics, queue, jobs)
+  // ==========================================
+  public readonly mail = {
+    providers: () => {
+      return this.request<HubResponse<HubMailProviderInfo[]>>(`/api/v1/apps/${this.appId}/mail/providers`, {
+        method: 'GET'
+      })
+    },
+    send: (data: HubMailSendOptions) => {
+      return this.request<HubResponse<HubMailSendResult>>(`/api/v1/apps/${this.appId}/mail/send`, {
+        method: 'POST',
+        body: data as any
+      })
+    },
+    schedule: (data: HubMailScheduleOptions) => {
+      return this.request<HubResponse<HubMailSendResult & { jobId?: string }>>(`/api/v1/apps/${this.appId}/mail/schedule`, {
+        method: 'POST',
+        body: data as any
+      })
+    },
+    test: (to: string) => {
+      return this.request<HubResponse<{ messageId?: string, provider?: string }>>(`/api/v1/apps/${this.appId}/mail/test`, {
+        method: 'POST',
+        body: { to } as any
+      })
+    },
+    stats: () => {
+      return this.request<HubResponse<unknown>>(`/api/v1/apps/${this.appId}/mail/stats`, {
+        method: 'GET'
+      })
+    },
+
+    templates: {
+      list: (params?: HubMailTemplateListParams) => {
+        return this.request<HubResponse<HubMailTemplate[]> & { pagination?: { page: number, limit: number, total: number } }>(
+          `/api/v1/apps/${this.appId}/mail/templates`,
+          { method: 'GET', params: params as any }
+        )
+      },
+      get: (templateId: string) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}`, {
+          method: 'GET'
+        })
+      },
+      byKey: (key: string, locale?: string) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates/by-key/${encodeURIComponent(key)}`, {
+          method: 'GET',
+          params: locale ? { locale } : undefined
+        })
+      },
+      create: (data: HubMailTemplateInput) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates`, {
+          method: 'POST',
+          body: data as any
+        })
+      },
+      update: (templateId: string, data: Partial<HubMailTemplateInput>) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}`, {
+          method: 'PUT',
+          body: data as any
+        })
+      },
+      delete: (templateId: string) => {
+        return this.request<HubResponse<unknown>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}`, {
+          method: 'DELETE'
+        })
+      },
+      archive: (templateId: string) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}/archive`, {
+          method: 'POST'
+        })
+      },
+      clone: (templateId: string) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}/clone`, {
+          method: 'POST'
+        })
+      },
+      publish: (templateId: string) => {
+        return this.request<HubResponse<HubMailTemplate>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}/publish`, {
+          method: 'POST'
+        })
+      },
+      preview: (templateId: string, variables?: Record<string, unknown>) => {
+        return this.request<HubResponse<HubMailTemplatePreview>>(`/api/v1/apps/${this.appId}/mail/templates/${encodeURIComponent(templateId)}/preview`, {
+          method: 'POST',
+          body: { variables } as any
+        })
+      }
+    },
+
+    analytics: {
+      summary: (params?: HubMailAnalyticsParams) => {
+        return this.request<HubResponse<HubMailAnalyticsSummary>>(`/api/v1/apps/${this.appId}/mail/analytics/summary`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      timeseries: (params?: HubMailAnalyticsParams & { granularity?: 'hour' | 'day' | 'week' | 'month' }) => {
+        return this.request<HubResponse<HubMailTimeseriesPoint[]>>(`/api/v1/apps/${this.appId}/mail/analytics/timeseries`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      campaigns: (params?: HubMailAnalyticsParams) => {
+        return this.request<HubResponse<unknown>>(`/api/v1/apps/${this.appId}/mail/analytics/campaigns`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      events: (params?: HubMailEventQuery) => {
+        return this.request<HubResponse<HubMailAnalyticsEventsResult>>(`/api/v1/apps/${this.appId}/mail/analytics/events`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      topDomains: (params?: HubMailAnalyticsParams & { limit?: number }) => {
+        return this.request<HubResponse<HubMailTopDomainStats[]>>(`/api/v1/apps/${this.appId}/mail/analytics/top-domains`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      topTemplates: (params?: HubMailAnalyticsParams & { limit?: number }) => {
+        return this.request<HubResponse<HubMailTopTemplateStats[]>>(`/api/v1/apps/${this.appId}/mail/analytics/top-templates`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      exportCsvUrl: (params?: HubMailAnalyticsParams) => {
+        const query = new URLSearchParams()
+        if (params?.from) query.set('from', params.from)
+        if (params?.to) query.set('to', params.to)
+        const suffix = query.toString() ? `?${query.toString()}` : ''
+        return `${this.baseUrl}/api/v1/apps/${this.appId}/mail/analytics/export${suffix}`
+      }
+    },
+
+    inbox: {
+      profile: () => {
+        return this.request<HubResponse<HubInboxProfile>>(`/api/v1/apps/${this.appId}/mail/inbox/profile`, {
+          method: 'GET'
+        })
+      },
+      messages: (params?: HubInboxMessagesQuery) => {
+        return this.request<HubResponse<HubInboxMessagesResult>>(`/api/v1/apps/${this.appId}/mail/inbox/messages`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      message: (messageId: string) => {
+        return this.request<HubResponse<HubInboxDetail>>(`/api/v1/apps/${this.appId}/mail/inbox/messages/${encodeURIComponent(messageId)}`, {
+          method: 'GET'
+        })
+      },
+      thread: (threadId: string) => {
+        return this.request<HubResponse<HubInboxThread>>(`/api/v1/apps/${this.appId}/mail/inbox/threads/${encodeURIComponent(threadId)}`, {
+          method: 'GET'
+        })
+      },
+      send: (data: HubInboxSendInput) => {
+        return this.request<HubResponse<HubInboxItem>>(`/api/v1/apps/${this.appId}/mail/inbox/messages`, {
+          method: 'POST',
+          body: data as any
+        })
+      },
+      setLabels: (messageId: string, data: HubInboxLabelsInput) => {
+        return this.request<HubResponse<HubInboxItem>>(`/api/v1/apps/${this.appId}/mail/inbox/messages/${encodeURIComponent(messageId)}/labels`, {
+          method: 'POST',
+          body: data as any
+        })
+      },
+      attachmentUrl: (messageId: string, attachmentId: string) =>
+        `${this.baseUrl}/api/v1/apps/${this.appId}/mail/inbox/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`
+    },
+
+    queue: {
+      get: (params?: HubMailQueueQuery) => {
+        return this.request<HubResponse<HubMailQueueState>>(`/api/v1/apps/${this.appId}/mail/queue`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      action: (action: HubMailQueueAction, jobId?: string) => {
+        return this.request<HubResponse<{ action: string }>>(`/api/v1/apps/${this.appId}/mail/queue`, {
+          method: 'POST',
+          body: { action, jobId } as any
+        })
+      }
+    },
+
+    jobs: {
+      get: (jobId: string) => {
+        return this.request<HubResponse<HubMailJobDetail>>(`/api/v1/apps/${this.appId}/mail/jobs/${encodeURIComponent(jobId)}`, {
+          method: 'GET'
+        })
+      },
+      delete: (jobId: string) => {
+        return this.request<HubResponse<{ success: boolean }>>(`/api/v1/apps/${this.appId}/mail/jobs/${encodeURIComponent(jobId)}`, {
+          method: 'DELETE'
+        })
+      }
     }
   }
 
