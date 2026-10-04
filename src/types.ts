@@ -174,13 +174,14 @@ export interface HubPasswordChange {
 export interface HubForgotPasswordRequest {
   email: string
   appId?: string
+  redirectUrl?: string
 }
 
 export interface HubResetPasswordRequest {
   email: string
   token: string
   password: string
-  appId: string
+  appId?: string
 }
 
 export interface HubSession {

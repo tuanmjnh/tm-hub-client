@@ -297,13 +297,13 @@ export class HubClient {
     forgotPassword: (data: HubForgotPasswordRequest) => {
       return this.request<HubResponse<void>>('/api/v1/auth/forgot-password', {
         method: 'POST',
-        body: { ...data, appId: this.appId } as any
+        body: { ...data, appId: data.appId || this.appId } as any
       })
     },
     resetPassword: (data: HubResetPasswordRequest) => {
       return this.request<HubResponse<void>>('/api/v1/auth/reset-password', {
         method: 'POST',
-        body: { ...data, appId: this.appId } as any
+        body: { ...data, appId: data.appId || this.appId } as any
       })
     },
     refresh: async (refreshToken: string) => {
