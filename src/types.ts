@@ -289,6 +289,8 @@ export interface HubPushSubscription {
   fcmToken?: string
 }
 
+export type HubLogMode = 'full' | 'compact' | 'minimal' | 'none' | 'off'
+
 export interface HubAuditLog {
   _id: string
   appId: string
@@ -307,6 +309,9 @@ export interface HubAuditLog {
   userAgent?: string
   at: number
   changes?: Record<string, { old: unknown, new: unknown }>
+  changedFields?: string[]
+  summary?: string
+  logMode?: HubLogMode
 }
 
 export interface HubApp {
