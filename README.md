@@ -23,6 +23,9 @@ Unified, isomorphic TypeScript Client SDK for **TM-Hub** (Centralized IAM, Remot
   - `roles`: Role & Permission Matrix CRUD operations.
   - `routes`: Dynamic navigation system route management.
   - `permissions`: Read-only global capability catalog (§6.4).
+  - `connections`: Per-app provider credentials (list, save manual, quick connect, test, disconnect, OAuth start).
+  - `imports`: Data import targets, preview, run and Google Sheets fetch (server-side proxy).
+  - `ai`: AI provider catalogue, credentials, model catalogue, discovery and grants (R147).
   - `logs` / `auditLogs`: Query dedicated MongoDB audit history logs.
 
 Hard delete endpoints (`apps.delete`, `users.delete`, `roles.delete`) require a **root** token on the TM-Hub server. Routes are soft-deleted server-side.

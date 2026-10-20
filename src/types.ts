@@ -1136,3 +1136,121 @@ export interface HubInboxLabelsInput {
   addLabelIds?: string[]
   removeLabelIds?: string[]
 }
+
+// ==========================================
+// AI providers & model catalogue (R147)
+// ==========================================
+export interface HubAiProviderDefinition {
+  id: string
+  key: string
+  name: string
+  category: string
+  adapter_type: string
+  base_url_default: string | null
+  capabilities_supported: string[]
+  model_discovery_strategy: string | null
+  docs_url: string | null
+  is_builtin: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Public AI credential view — secrets never leave the hub. */
+export interface HubAiConnection {
+  id: string
+  provider: string
+  name: string
+  mode: HubConnectionMode
+  status: HubConnectionStatus
+  label: string | null
+  config: Record<string, unknown>
+  hasSecrets: boolean
+  isEnabled: boolean
+  isShared: boolean
+  environment: string | null
+  baseUrlOverride: string | null
+  category: string | null
+  providerDefinitionId: string | null
+  expiresAt: string | null
+  connectedBy: string | null
+  lastTestAt: string | null
+  lastTestOk: boolean | null
+  connectedAt: string
+  updatedAt: string
+}
+
+export interface HubAiProviderItem {
+  definition: HubAiProviderDefinition
+  connections: HubAiConnection[]
+}
+
+export interface HubAiModel {
+  id: string
+  provider: string
+  connectionId: string | null
+  modelId: string
+  displayName: string | null
+  capabilities: string[]
+  isEnabled: boolean
+  source: 'discovered' | 'manual'
+  syncedAt: string | null
+}
+
+export interface HubAiModelListParams {
+  provider?: string
+  connectionId?: string
+  includeDisabled?: boolean
+}
+
+export interface HubAiConnectionInput {
+  provider: string
+  name?: string
+  values: Record<string, string>
+  environment?: string
+  baseUrlOverride?: string
+  isShared?: boolean
+}
+
+export interface HubAiConnectionPatch {
+  isEnabled?: boolean
+  isShared?: boolean
+}
+
+export interface HubAiDiscoverInput {
+  connectionId?: string
+  provider?: string
+  baseUrl?: string
+  apiKey?: string
+  persist?: boolean
+}
+
+export interface HubAiDiscoveredModel {
+  id: string
+  displayName: string
+}
+
+export interface HubAiDiscoverResult {
+  baseUrl?: string
+  discovered: number
+  persisted: number
+  models: HubAiDiscoveredModel[]
+}
+
+export interface HubAiManualModelInput {
+  provider: string
+  connectionId?: string | null
+  modelId: string
+  displayName?: string
+  capabilities?: string[]
+}
+
+export interface HubAiGrant {
+  id: string
+  connection_id: string
+  app_id: string
+  is_enabled: boolean
+  granted_by: string | null
+  created_at: string
+  updated_at: string
+}

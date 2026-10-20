@@ -100,7 +100,17 @@ import type {
   HubInboxMessagesQuery,
   HubInboxMessagesResult,
   HubInboxSendInput,
-  HubInboxLabelsInput
+  HubInboxLabelsInput,
+  HubAiProviderItem,
+  HubAiConnection,
+  HubAiConnectionInput,
+  HubAiConnectionPatch,
+  HubAiDiscoverInput,
+  HubAiDiscoverResult,
+  HubAiModel,
+  HubAiModelListParams,
+  HubAiManualModelInput,
+  HubAiGrant
 } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
@@ -815,6 +825,113 @@ export class HubClient {
       return this.request<HubPermissionCatalogResponse>(`/api/v1/apps/${target}/permissions`, {
         method: 'GET'
       })
+    }
+  }
+
+  // ==========================================
+  // MODULE: AI providers, credentials & models (R147)
+  // ==========================================
+  public readonly ai = {
+    /** Provider definitions merged with this app's usable connections. */
+    providers: (appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubAiProviderItem[]>>(`/api/v1/apps/${target}/ai/providers`, {
+        method: 'GET'
+      })
+    },
+
+    /** Discover the live model catalogue; `persist` defaults to true with a connectionId. */
+    discover: (input: HubAiDiscoverInput, appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubAiDiscoverResult>>(`/api/v1/apps/${target}/ai/discover`, {
+        method: 'POST',
+        body: input as any
+      })
+    },
+
+    connections: {
+      /** Add or rotate one credential; `name` allows many accounts per provider. */
+      saveManual: (input: HubAiConnectionInput, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<HubAiConnection>>(`/api/v1/apps/${target}/ai/connections/manual`, {
+          method: 'POST',
+          body: input as any
+        })
+      },
+      update: (connectionId: string, patch: HubAiConnectionPatch, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<HubAiConnection>>(`/api/v1/apps/${target}/ai/connections/${encodeURIComponent(connectionId)}`, {
+          method: 'PATCH',
+          body: patch as any
+        })
+      },
+      delete: (connectionId: string, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<{ id: string, deleted: boolean }>>(`/api/v1/apps/${target}/ai/connections/${encodeURIComponent(connectionId)}`, {
+          method: 'DELETE'
+        })
+      },
+      /** Health test; `name` selects the credential row (default: 'default'). */
+      test: (provider: string, name = 'default', appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<HubConnectionTestResult>>(`/api/v1/apps/${target}/connections/test`, {
+          method: 'POST',
+          body: { provider, name } as any
+        })
+      }
+    },
+
+    models: {
+      list: (params?: HubAiModelListParams, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<HubAiModel[]>>(`/api/v1/apps/${target}/ai/models`, {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      add: (input: HubAiManualModelInput, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<HubAiModel>>(`/api/v1/apps/${target}/ai/models`, {
+          method: 'POST',
+          body: input as any
+        })
+      },
+      setEnabled: (modelId: string, isEnabled: boolean, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<{ id: string, isEnabled: boolean }>>(`/api/v1/apps/${target}/ai/models/${encodeURIComponent(modelId)}`, {
+          method: 'PATCH',
+          body: { isEnabled } as any
+        })
+      },
+      delete: (modelId: string, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<{ id: string, deleted: boolean }>>(`/api/v1/apps/${target}/ai/models/${encodeURIComponent(modelId)}`, {
+          method: 'DELETE'
+        })
+      }
+    },
+
+    grants: {
+      list: (appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<HubAiGrant[]>>(`/api/v1/apps/${target}/ai/grants`, {
+          method: 'GET'
+        })
+      },
+      add: (connectionId: string, targetAppId: string, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<{ connectionId: string, appId: string }>>(`/api/v1/apps/${target}/ai/grants`, {
+          method: 'POST',
+          body: { connectionId, targetAppId } as any
+        })
+      },
+      revoke: (connectionId: string, targetAppId: string, appId?: string) => {
+        const target = appId || this.appId
+        return this.request<HubResponse<{ connectionId: string, appId: string, revoked: boolean }>>(`/api/v1/apps/${target}/ai/grants`, {
+          method: 'DELETE',
+          params: { connectionId, targetAppId } as any
+        })
+      }
     }
   }
 
