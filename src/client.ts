@@ -110,7 +110,8 @@ import type {
   HubAiModel,
   HubAiModelListParams,
   HubAiManualModelInput,
-  HubAiGrant
+  HubAiGrant,
+  HubDocsContent
 } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
@@ -823,6 +824,19 @@ export class HubClient {
     list: (appId?: string) => {
       const target = appId || this.appId
       return this.request<HubPermissionCatalogResponse>(`/api/v1/apps/${target}/permissions`, {
+        method: 'GET'
+      })
+    }
+  }
+
+  // ==========================================
+  // MODULE: Docs (shared reference content, single source in tm-hub)
+  // ==========================================
+  public readonly docs = {
+    /** Get the localized reference docs content for an app (requires a user JWT). */
+    get: (appId?: string) => {
+      const target = appId || this.appId
+      return this.request<HubResponse<HubDocsContent>>(`/api/v1/apps/${target}/docs`, {
         method: 'GET'
       })
     }

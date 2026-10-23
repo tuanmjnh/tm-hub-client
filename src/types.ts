@@ -399,6 +399,18 @@ export interface HubPermissionCatalogResponse {
   modules?: HubPermissionModuleDef[]
 }
 
+/**
+ * Reference docs content served by `GET /api/v1/apps/:appId/docs`.
+ * Payload structure lives in tm-hub/shared/docs/content.ts (single source of
+ * truth) — typed loosely here so the SDK never needs a release just because
+ * the docs content shape grows.
+ */
+export interface HubDocsContent {
+  version: number
+  updatedAt: string
+  [key: string]: unknown
+}
+
 export interface HubAuthPermissions {
   appId?: string
   roles: string[]
