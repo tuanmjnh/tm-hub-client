@@ -113,6 +113,7 @@ import type {
   HubAiGrant,
   HubDocsContent
 } from './types'
+import { DEFAULT_HUB_URL } from './types'
 
 /** Dual-read aliases (mirror tm-hub authz.LEGACY_PERMISSION_ALIASES). */
 const CAPABILITY_ALIASES: Record<string, string[]> = {
@@ -138,7 +139,7 @@ export class HubClient {
   private refreshInFlight: Promise<boolean> | null = null
 
   constructor(options: HubClientOptions) {
-    this.baseUrl = (options.baseUrl || 'http://localhost:4000').replace(/\/$/, '')
+    this.baseUrl = (options.baseUrl || DEFAULT_HUB_URL).replace(/\/$/, '')
     this.appId = options.appId
     this.getAccessToken = options.getAccessToken
     this.onUnauthorized = options.onUnauthorized

@@ -1,5 +1,16 @@
+export const DEFAULT_HUB_PORT = 4000
+export const DEFAULT_HUB_URL = 'http://localhost:4000'
+
+export const PLATFORM_PORTS = {
+  HUB: 4000,
+  TRADING: 4001,
+  TOOLS: 4002,
+  TOOLS_DESKTOP: 3456
+} as const
+
 export interface HubClientOptions {
-  baseUrl: string
+  /** Base URL of the TM Hub instance. Defaults to 'http://localhost:4000' (DEFAULT_HUB_URL). */
+  baseUrl?: string
   appId: string
   getAccessToken?: () => string | null | undefined | Promise<string | null | undefined>
   onUnauthorized?: () => void
