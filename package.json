@@ -1,7 +1,7 @@
 {
   "name": "tm-hub-client",
-  "version": "1.0.8",
-  "description": "Unified TypeScript SDK for TM-Hub (IAM, Configs, Media, Notifications & Audit Logs)",
+  "version": "1.0.9",
+  "description": "Unified TypeScript SDK for TM-Hub (IAM, Configs, Media, Notifications, Audit Logs & AI Relay)",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

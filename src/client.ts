@@ -111,7 +111,16 @@ import type {
   HubAiModelListParams,
   HubAiManualModelInput,
   HubAiGrant,
-  HubDocsContent
+  HubAiRelayCatalogConnection,
+  HubAiRelayChatInput,
+  HubAiRelayChatResult,
+  HubDocsContent,
+  HubTenant,
+  HubCreateTenantInput,
+  HubUpdateTenantInput,
+  HubSite,
+  HubCreateSiteInput,
+  HubUpdateSiteInput
 } from './types'
 import { DEFAULT_HUB_URL } from './types'
 
@@ -135,6 +144,7 @@ export class HubClient {
   private customFetch: typeof globalThis.fetch
   private getRefreshToken?: () => string | null | undefined | Promise<string | null | undefined>
   private onTokensRefreshed?: HubClientOptions['onTokensRefreshed']
+  private getAppSecret?: HubClientOptions['getAppSecret']
   private cachedPermissions: string[] | null = null
   private refreshInFlight: Promise<boolean> | null = null
 
@@ -146,6 +156,19 @@ export class HubClient {
     this.customFetch = options.fetch || globalThis.fetch.bind(globalThis)
     this.getRefreshToken = options.getRefreshToken
     this.onTokensRefreshed = options.onTokensRefreshed
+    this.getAppSecret = options.getAppSecret
+  }
+
+  /**
+   * Relay calls identify the app, not a user. Failing here with a precise
+   * message beats a bare 401 from the hub.
+   */
+  private async appSecretHeaders(): Promise<Record<string, string>> {
+    const secret = this.getAppSecret ? await Promise.resolve(this.getAppSecret()) : null
+    if (!secret) {
+      throw new Error('AI relay requires getAppSecret (X-App-Secret) - pass it when creating the client')
+    }
+    return { 'X-App-Secret': secret }
   }
 
   async request<T = unknown>(
@@ -529,6 +552,71 @@ export class HubClient {
     rotateSecret: (appId: string) => {
       return this.request<HubResponse<{ id: string, secretKey: string }>>(`/api/v1/apps/${appId}/rotate-secret`, {
         method: 'POST'
+      })
+    }
+  }
+
+  // ==========================================
+  // MODULE: Tenants & Sites (Multi-Tenancy)
+  // ==========================================
+  public readonly tenants = {
+    /** List all tenants. Requires tenants.read or root. */
+    list: (params?: { status?: string, search?: string }) => {
+      return this.request<HubResponse<HubTenant[]>>('/api/v1/tenants', {
+        params
+      })
+    },
+    /** Get tenant details by tenantId. */
+    get: (tenantId: string) => {
+      return this.request<HubResponse<HubTenant>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}`)
+    },
+    /** Create a new tenant. Requires tenants.manage or root. */
+    create: (data: HubCreateTenantInput) => {
+      return this.request<HubResponse<HubTenant>>('/api/v1/tenants', {
+        method: 'POST',
+        body: data as any
+      })
+    },
+    /** Update tenant properties or status. */
+    update: (tenantId: string, data: HubUpdateTenantInput) => {
+      return this.request<HubResponse<HubTenant>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}`, {
+        method: 'PUT',
+        body: data as any
+      })
+    },
+    /** Delete a tenant. Requires tenants.manage or root. */
+    delete: (tenantId: string) => {
+      return this.request<HubResponse<void>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}`, {
+        method: 'DELETE'
+      })
+    },
+    /** Get apps assigned to this tenant. */
+    getApps: (tenantId: string) => {
+      return this.request<HubResponse<HubApp[]>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}/apps`)
+    },
+    /** List sites under a tenant. */
+    listSites: (tenantId: string) => {
+      return this.request<HubResponse<HubSite[]>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}/sites`)
+    },
+    /** Create a new site under a tenant. */
+    createSite: (tenantId: string, data: HubCreateSiteInput) => {
+      return this.request<HubResponse<HubSite>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}/sites`, {
+        method: 'POST',
+        body: data as any
+      })
+    },
+    /** Update a site configuration. */
+    updateSite: (tenantId: string, siteId: string, data: HubUpdateSiteInput) => {
+      return this.request<HubResponse<HubSite>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}/sites`, {
+        method: 'PUT',
+        body: { siteId, ...data } as any
+      })
+    },
+    /** Delete a site under a tenant. */
+    deleteSite: (tenantId: string, siteId: string) => {
+      return this.request<HubResponse<void>>(`/api/v1/tenants/${encodeURIComponent(tenantId)}/sites`, {
+        method: 'DELETE',
+        params: { siteId }
       })
     }
   }
@@ -923,6 +1011,52 @@ export class HubClient {
         return this.request<HubResponse<{ id: string, deleted: boolean }>>(`/api/v1/apps/${target}/ai/models/${encodeURIComponent(modelId)}`, {
           method: 'DELETE'
         })
+      }
+    },
+
+    /**
+     * Server-to-server relay: the app authenticates with its own secret
+     * (X-App-Secret) instead of a user JWT, so provider credentials never leave
+     * the hub. Every method throws if `getAppSecret` was not supplied.
+     */
+    relay: {
+      /** Connections (own rows + enabled grants) and their enabled models. */
+      catalog: async (appId?: string) => {
+        const target = appId || this.appId
+        const headers = await this.appSecretHeaders()
+        return this.request<HubResponse<{ connections: HubAiRelayCatalogConnection[] }>>(
+          `/api/v1/apps/${target}/ai/relay/catalog`,
+          { method: 'GET', headers }
+        )
+      },
+
+      /**
+       * One chat turn through a connection. `systemPrompt` is sugar: the hub
+       * only understands `messages`, so it is prepended as a system message
+       * here. Attachments carry base64 `data`, never a `data:` URL.
+       */
+      chat: async (input: HubAiRelayChatInput, appId?: string) => {
+        const target = appId || this.appId
+        const headers = await this.appSecretHeaders()
+        const systemPrompt = input.systemPrompt?.trim()
+        const messages = systemPrompt
+          ? [{ role: 'system' as const, content: systemPrompt }, ...input.messages]
+          : input.messages
+
+        return this.request<HubResponse<HubAiRelayChatResult>>(
+          `/api/v1/apps/${target}/ai/relay/chat`,
+          {
+            method: 'POST',
+            headers,
+            body: {
+              connectionId: input.connectionId,
+              model: input.model,
+              messages,
+              maxTokens: input.maxTokens,
+              temperature: input.temperature
+            } as any
+          }
+        )
       }
     },
 

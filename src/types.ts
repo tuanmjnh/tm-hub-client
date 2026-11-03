@@ -19,6 +19,12 @@ export interface HubClientOptions {
   getRefreshToken?: () => string | null | undefined | Promise<string | null | undefined>
   /** Optional: called after a successful silent refresh so the host can persist new tokens. */
   onTokensRefreshed?: (tokens: { accessToken: string, refreshToken: string, expiresIn: number }) => void | Promise<void>
+  /**
+   * Optional: this app's TM-Hub secret (server only), sent as X-App-Secret.
+   * Required by the AI relay, which authenticates the app itself instead of a
+   * signed-in user. Never ship this to a browser.
+   */
+  getAppSecret?: () => string | null | undefined | Promise<string | null | undefined>
 }
 
 export type Capability =
@@ -57,6 +63,8 @@ export type Capability =
   | 'permissions.update'
   | 'permissions.delete'
   | 'permissions.manage'
+  | 'tenants.read'
+  | 'tenants.manage'
   | 'platform.apps.manage'
   | 'platform.crossapp.read'
   | 'platform.crossapp.write'
@@ -329,6 +337,7 @@ export interface HubApp {
   id: string
   name: string
   description?: string
+  tenantId?: string | null
   type?: 'system' | 'application' | 'service'
   isSystem?: boolean
   isActive?: boolean
@@ -1277,3 +1286,139 @@ export interface HubAiGrant {
   created_at: string
   updated_at: string
 }
+
+/**
+ * Binary payload for a relay turn. `data` is base64 without the `data:` prefix
+ * (hub caps one attachment at 8 MB of base64 and 12 MB per turn).
+ */
+export interface HubAiRelayAttachment {
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'application/pdf'
+  data: string
+}
+
+export interface HubAiRelayMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  /** A vision turn may carry images with an empty caption. */
+  attachments?: HubAiRelayAttachment[]
+}
+
+export interface HubAiRelayChatInput {
+  connectionId: string
+  messages: HubAiRelayMessage[]
+  /** Omit to use the connection's configured default model. */
+  model?: string
+  /** Convenience: prepended as a system message before `messages`. */
+  systemPrompt?: string
+  maxTokens?: number
+  temperature?: number
+}
+
+export interface HubAiRelayUsage {
+  inputTokens?: number
+  outputTokens?: number
+}
+
+export interface HubAiRelayChatResult {
+  ok: boolean
+  content: string
+  provider: string
+  model: string
+  usage: HubAiRelayUsage | null
+}
+
+export interface HubAiRelayCatalogModel {
+  modelId: string
+  displayName: string
+}
+
+/** A connection this app may chat through (own row or an enabled grant). */
+export interface HubAiRelayCatalogConnection {
+  connectionId: string
+  provider: string
+  name: string
+  adapterType: string
+  hasKey: boolean
+  model: string | null
+  models: HubAiRelayCatalogModel[]
+}
+
+// ==========================================
+// Tenants & Sites (v1.31)
+// ==========================================
+export type HubTenantStatus = 'active' | 'suspended' | 'archived'
+
+export interface HubTenantDatabaseBinding {
+  provider: 'mongodb' | 'external'
+  databaseName?: string
+  clusterRef?: string
+  status: 'configured' | 'missing' | 'disabled'
+}
+
+export interface HubTenant {
+  id: string
+  tenantId: string
+  name: string
+  slug: string
+  status: HubTenantStatus
+  planCode?: string
+  metadata?: Record<string, unknown>
+  databaseBinding?: HubTenantDatabaseBinding
+  appCount?: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HubCreateTenantInput {
+  tenantId: string
+  name: string
+  slug?: string
+  planCode?: string
+  metadata?: Record<string, unknown>
+  databaseBinding?: HubTenantDatabaseBinding
+}
+
+export interface HubUpdateTenantInput {
+  name?: string
+  slug?: string
+  status?: HubTenantStatus
+  planCode?: string
+  metadata?: Record<string, unknown>
+  databaseBinding?: HubTenantDatabaseBinding
+}
+
+export type HubSiteStatus = 'active' | 'disabled'
+
+export interface HubSite {
+  id: string
+  tenantId: string
+  siteId: string
+  name: string
+  primaryDomain: string
+  allowedDomains: string[]
+  defaultLocale: string
+  locales: string[]
+  status: HubSiteStatus
+  publicConfigRevision?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HubCreateSiteInput {
+  siteId: string
+  name: string
+  primaryDomain: string
+  allowedDomains?: string[]
+  defaultLocale?: string
+  locales?: string[]
+}
+
+export interface HubUpdateSiteInput {
+  name?: string
+  primaryDomain?: string
+  allowedDomains?: string[]
+  defaultLocale?: string
+  locales?: string[]
+  status?: HubSiteStatus
+}
+

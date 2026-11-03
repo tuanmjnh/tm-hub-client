@@ -27,6 +27,7 @@ Unified, isomorphic TypeScript Client SDK for **TM-Hub** (Centralized IAM, Remot
   - `connections`: Per-app provider credentials (list, save manual, quick connect, test, disconnect, OAuth start).
   - `imports`: Data import targets, preview, run and Google Sheets fetch (server-side proxy).
   - `ai`: AI provider catalogue, credentials, model catalogue, discovery and grants (R147).
+  - `ai.relay`: server-to-server chat through a connection (images/PDF attachments allowed) so satellite backends never hold provider keys.
   - `logs` / `auditLogs`: Query dedicated MongoDB audit history logs.
 
 Hard delete endpoints (`apps.delete`, `users.delete`, `roles.delete`) require a **root** token on the TM-Hub server. Routes are soft-deleted server-side.
@@ -113,10 +114,58 @@ export const useHub = () => {
     routes: client.routes,
     permissions: client.permissions,
     capabilities: client.capabilities,
-    logs: client.logs
+    logs: client.logs,
+    ai: client.ai
   }
 }
 ```
+
+---
+
+## AI Relay (server-to-server)
+
+The relay is how a satellite backend uses AI without storing any provider key:
+TM-Hub decrypts its own credential, calls the provider and returns the answer.
+Authentication is the **app itself** (`X-App-Id` + `X-App-Secret`), so build
+this client on the server only and pass `getAppSecret`.
+
+```typescript
+const hub = createHubClient({
+  baseUrl: 'https://hub.yourdomain.com',
+  appId: process.env.HUB_APP_ID!,
+  getAppSecret: () => process.env.HUB_APP_SECRET   // never expose this to the browser
+})
+
+// Which connections/models this app may use (own rows + enabled grants)
+const { data } = await hub.ai.relay.catalog()
+
+// Text turn — systemPrompt is prepended as a system message
+const { data: answer } = await hub.ai.relay.chat({
+  connectionId: data.connections[0].connectionId,
+  model: 'gemini-3.5-flash',
+  systemPrompt: 'Answer in one sentence.',
+  messages: [{ role: 'user', content: 'What is a pdf?' }],
+  maxTokens: 512,
+  temperature: 0.1
+})
+
+// Vision turn — attachments are base64 strings (no `data:` prefix).
+// Hub limits: 4 attachments per message, 8 MB base64 each, 12 MB per turn,
+// mime types png / jpeg / webp / pdf.
+const { data: read } = await hub.ai.relay.chat({
+  connectionId: data.connections[0].connectionId,
+  messages: [{
+    role: 'user',
+    content: 'Return the table as JSON.',
+    attachments: [{ mimeType: 'image/png', data: pngBase64 }]
+  }]
+})
+
+console.log(read.content, read.provider, read.model, read.usage)
+```
+
+`ai.relay.*` throws before hitting the network when `getAppSecret` is missing,
+and the hub answers 404 when a connection is not usable by this app.
 
 ---
 
