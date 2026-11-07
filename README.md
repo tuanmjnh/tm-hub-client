@@ -28,6 +28,7 @@ Unified, isomorphic TypeScript Client SDK for **TM-Hub** (Centralized IAM, Remot
   - `imports`: Data import targets, preview, run and Google Sheets fetch (server-side proxy).
   - `ai`: AI provider catalogue, credentials, model catalogue, discovery and grants (R147).
   - `ai.relay`: server-to-server chat through a connection (images/PDF attachments allowed) so satellite backends never hold provider keys.
+  - `storage`: server-to-server object storage (R2 / S3 / Supabase) — app-scoped upload/download grants, object manifest, folders and copy; provider credentials never leave the hub.
   - `logs` / `auditLogs`: Query dedicated MongoDB audit history logs.
 
 Hard delete endpoints (`apps.delete`, `users.delete`, `roles.delete`) require a **root** token on the TM-Hub server. Routes are soft-deleted server-side.
@@ -166,6 +167,72 @@ console.log(read.content, read.provider, read.model, read.usage)
 
 `ai.relay.*` throws before hitting the network when `getAppSecret` is missing,
 and the hub answers 404 when a connection is not usable by this app.
+
+---
+
+## Storage Gateway (server-to-server)
+
+Generic object storage over Cloudflare R2, AWS S3 or Supabase Storage. Like the
+relay, authentication is the **app itself** (`X-App-Id` + `X-App-Secret`): build
+this client on the server only and pass `getAppSecret`. Provider credentials are
+decrypted inside the hub and never returned; callers receive only short-lived,
+object-scoped upload/download grants.
+
+> **Signed URLs are bearer secrets.** Never log them, put them in `runtimeConfig.public`,
+> or persist them in localStorage / a database. Objects are addressed by `objectId`;
+> the internal provider `objectKey` is not part of the public manifest view.
+
+```typescript
+const hub = createHubClient({
+  baseUrl: 'https://hub.yourdomain.com',
+  appId: process.env.HUB_APP_ID!,
+  getAppSecret: () => process.env.HUB_APP_SECRET   // server-side only
+})
+
+// 1. Which storage connections this app may use (own rows + enabled grants)
+const { data: inv } = await hub.storage.connections()
+const connectionId = inv.connections[0].connectionId
+
+// 2. Initiate an upload — returns a short-lived grant (transferMode: 'single')
+const { data: grant } = await hub.storage.initUpload({
+  connectionId,
+  namespace: 'tm-tools/pdf',
+  relativePath: 'invoices/2026-001.pdf',
+  contentType: 'application/pdf',
+  sizeBytes: pdfBuffer.byteLength
+})
+
+// 3. PUT the bytes directly to the provider using the grant (server or browser)
+await fetch(grant.uploadUrl, {
+  method: grant.method,
+  headers: grant.headers,
+  body: pdfBuffer
+})
+
+// 4. Complete — the hub verifies via independent HEAD (size/type/checksum), marks ready
+const { data: done } = await hub.storage.completeUpload(grant.uploadId)
+// done.object is the ready manifest row (or null if verification failed)
+
+// 5. Later: a short-lived download grant
+const { data: dl } = await hub.storage.createDownloadGrant(done.object!.objectId)
+// fetch(dl.downloadUrl) before dl.expiresAt
+
+// Listing / stat / folders / copy / delete
+const { data: page } = await hub.storage.listObjects({ connectionId, namespace: 'tm-tools/pdf', limit: 50 })
+// page.nextCursor feeds back as `cursor` for the next page
+await hub.storage.getObject(objectId)
+await hub.storage.createFolder({ connectionId, namespace: 'tm-tools/pdf', relativePath: 'invoices' })
+await hub.storage.listFolders({ connectionId, namespace: 'tm-tools/pdf' })
+await hub.storage.copyObject(objectId, { relativePath: 'invoices/renamed.pdf' })
+await hub.storage.deleteObject(objectId)
+await hub.storage.abortUpload(grant.uploadId)   // clean up an unfinished upload
+```
+
+Every method accepts a trailing `appId?` override (defaults to the client's `appId`).
+`storage.*` throws before hitting the network when `getAppSecret` is missing. Errors
+use stable `storage.*` codes (e.g. `storage.object_not_found`, `storage.upload_expired`,
+`storage.namespace_not_allowed`) surfaced via `error.statusCode` / `error.data`.
+Multipart upload is not exposed yet (`capabilities.multipartUpload` is `false`).
 
 ---
 
