@@ -1422,3 +1422,165 @@ export interface HubUpdateSiteInput {
   status?: HubSiteStatus
 }
 
+// ==========================================
+// Storage Gateway (v1.32)
+// ==========================================
+// Server-to-server object storage. The app authenticates with X-App-Secret;
+// provider credentials never leave the hub. Signed URLs are short-lived bearer
+// grants — never log or persist them. Objects are addressed by objectId; the
+// internal provider objectKey is not part of the public manifest view.
+export type HubStorageProviderKey = 'cloudflare_r2' | 'aws_s3' | 'supabase_storage'
+
+export interface HubStorageCapabilities {
+  directUpload: boolean
+  directDownload: boolean
+  multipartUpload: boolean
+  rangeRead: boolean
+  copyObject: boolean
+  listObjects: boolean
+  maxSingleUploadBytes?: number
+  maxObjectBytes?: number
+}
+
+/** Public manifest view — assembled by the Gateway from provider truth + Hub metadata. */
+export interface HubStorageObjectInfo {
+  objectId: string
+  connectionId: string
+  namespace: string
+  relativePath: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  checksumSha256?: string | null
+  etag?: string | null
+  status: 'pending' | 'ready' | 'deleted' | 'failed'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HubStorageUploadGrant {
+  uploadId: string
+  objectId: string
+  connectionId: string
+  objectKey: string
+  method: 'PUT' | 'POST'
+  uploadUrl: string
+  headers: Record<string, string>
+  expiresAt: string
+  maxBytes: number
+  transferMode: 'single' | 'multipart'
+  multipart?: {
+    providerUploadId: string
+    partSizeBytes: number
+    parts: Array<{ partNumber: number, uploadUrl: string, headers?: Record<string, string> }>
+  }
+}
+
+/** Sanitized connection inventory item — never carries config or secrets. */
+export interface HubStorageConnectionInfo {
+  connectionId: string
+  provider: HubStorageProviderKey
+  name: string
+  label: string | null
+  environment: string
+  origin: 'own' | 'granted'
+  capabilities: HubStorageCapabilities
+}
+
+/** Logical folder marker. Object stores have no true directories. */
+export interface HubStorageFolderInfo {
+  folderId: string
+  connectionId: string
+  namespace: string
+  relativePath: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HubStorageDownloadGrant {
+  objectId: string
+  downloadUrl: string
+  expiresAt: string
+  contentType: string
+  contentLength: number
+  fileName: string
+}
+
+export interface HubStorageInitUploadInput {
+  connectionId: string
+  namespace: string
+  relativePath: string
+  fileName?: string
+  contentType?: string
+  sizeBytes: number
+  checksumSha256?: string | null
+  overwrite?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface HubStorageListObjectsParams {
+  connectionId: string
+  namespace?: string
+  prefix?: string
+  cursor?: string | null
+  limit?: number
+}
+
+export interface HubStorageListFoldersParams {
+  connectionId: string
+  namespace?: string
+  prefix?: string
+  cursor?: string | null
+  limit?: number
+}
+
+export interface HubStorageCopyObjectInput {
+  relativePath: string
+  namespace?: string
+  fileName?: string
+  overwrite?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface HubStorageCreateFolderInput {
+  connectionId: string
+  namespace: string
+  relativePath: string
+}
+
+export interface HubStorageDeleteFolderInput {
+  connectionId: string
+  namespace: string
+  relativePath: string
+}
+
+export interface HubStorageCompleteUploadResult {
+  uploadId: string
+  status: 'ready'
+  object: HubStorageObjectInfo | null
+}
+
+export interface HubStorageAbortUploadResult {
+  uploadId: string
+  status: 'aborted'
+}
+
+export interface HubStorageDeleteObjectResult {
+  objectId: string
+  status: 'deleted'
+}
+
+export interface HubStorageDeleteFolderResult {
+  status: 'deleted'
+}
+
+export interface HubStorageListObjectsResult {
+  objects: HubStorageObjectInfo[]
+  nextCursor: string | null
+}
+
+export interface HubStorageListFoldersResult {
+  folders: HubStorageFolderInfo[]
+  nextCursor: string | null
+}
+

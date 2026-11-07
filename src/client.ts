@@ -120,7 +120,24 @@ import type {
   HubUpdateTenantInput,
   HubSite,
   HubCreateSiteInput,
-  HubUpdateSiteInput
+  HubUpdateSiteInput,
+  HubStorageConnectionInfo,
+  HubStorageUploadGrant,
+  HubStorageDownloadGrant,
+  HubStorageObjectInfo,
+  HubStorageFolderInfo,
+  HubStorageInitUploadInput,
+  HubStorageListObjectsParams,
+  HubStorageListFoldersParams,
+  HubStorageCopyObjectInput,
+  HubStorageCreateFolderInput,
+  HubStorageDeleteFolderInput,
+  HubStorageCompleteUploadResult,
+  HubStorageAbortUploadResult,
+  HubStorageDeleteObjectResult,
+  HubStorageDeleteFolderResult,
+  HubStorageListObjectsResult,
+  HubStorageListFoldersResult
 } from './types'
 import { DEFAULT_HUB_URL } from './types'
 
@@ -160,13 +177,13 @@ export class HubClient {
   }
 
   /**
-   * Relay calls identify the app, not a user. Failing here with a precise
-   * message beats a bare 401 from the hub.
+   * Server-to-server calls (AI relay, Storage Gateway) identify the app, not a
+   * user. Failing here with a precise message beats a bare 401 from the hub.
    */
   private async appSecretHeaders(): Promise<Record<string, string>> {
     const secret = this.getAppSecret ? await Promise.resolve(this.getAppSecret()) : null
     if (!secret) {
-      throw new Error('AI relay requires getAppSecret (X-App-Secret) - pass it when creating the client')
+      throw new Error('This call requires getAppSecret (X-App-Secret) - pass it when creating the client (server-side only)')
     }
     return { 'X-App-Secret': secret }
   }
@@ -1141,6 +1158,138 @@ export class HubClient {
         method: 'POST',
         body: { app_id: target } as any
       })
+    }
+  }
+
+  // ==========================================
+  // MODULE: Storage Gateway (server-to-server object storage)
+  // ==========================================
+  /**
+   * App-authenticated object storage. Every method sends X-App-Secret and throws
+   * if `getAppSecret` was not supplied. Provider credentials never leave the hub;
+   * callers receive only short-lived, object-scoped upload/download grants. Treat
+   * signed URLs as bearer secrets: never log them or persist them client-side.
+   * Objects are addressed by `objectId`; the internal provider key is not public.
+   */
+  public readonly storage = {
+    /** Sanitized connections this app may use (own rows + enabled grants) with capabilities. */
+    connections: async (appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<{ connections: HubStorageConnectionInfo[] }>>(
+        `/api/v1/apps/${target}/storage/connections`,
+        { method: 'GET', headers }
+      )
+    },
+
+    /** Initiate a single-part upload; returns a short-lived object-scoped grant. */
+    initUpload: async (input: HubStorageInitUploadInput, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageUploadGrant>>(
+        `/api/v1/apps/${target}/storage/uploads/initiate`,
+        { method: 'POST', headers, body: input as any }
+      )
+    },
+
+    /** Verify the uploaded object via independent server-side HEAD, then mark ready. */
+    completeUpload: async (uploadId: string, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageCompleteUploadResult>>(
+        `/api/v1/apps/${target}/storage/uploads/${encodeURIComponent(uploadId)}/complete`,
+        { method: 'POST', headers }
+      )
+    },
+
+    /** Abort an upload and clean up partial provider state where possible. */
+    abortUpload: async (uploadId: string, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageAbortUploadResult>>(
+        `/api/v1/apps/${target}/storage/uploads/${encodeURIComponent(uploadId)}/abort`,
+        { method: 'POST', headers }
+      )
+    },
+
+    /** Short-lived, object-scoped download grant. Never an arbitrary bucket/key. */
+    createDownloadGrant: async (objectId: string, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageDownloadGrant>>(
+        `/api/v1/apps/${target}/storage/objects/${encodeURIComponent(objectId)}/download-grant`,
+        { method: 'POST', headers }
+      )
+    },
+
+    /** Stat a single object's manifest metadata. */
+    getObject: async (objectId: string, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<{ object: HubStorageObjectInfo }>>(
+        `/api/v1/apps/${target}/storage/objects/${encodeURIComponent(objectId)}`,
+        { method: 'GET', headers }
+      )
+    },
+
+    /** Bounded cursor pagination over the app's object manifest; metadata only. */
+    listObjects: async (params: HubStorageListObjectsParams, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageListObjectsResult>>(
+        `/api/v1/apps/${target}/storage/objects`,
+        { method: 'GET', headers, params: params as any }
+      )
+    },
+
+    /** Logical folder markers, bounded cursor pagination. */
+    listFolders: async (params: HubStorageListFoldersParams, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageListFoldersResult>>(
+        `/api/v1/apps/${target}/storage/folders`,
+        { method: 'GET', headers, params: params as any }
+      )
+    },
+
+    /** Delete an object at the provider, then mark the manifest row deleted. */
+    deleteObject: async (objectId: string, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageDeleteObjectResult>>(
+        `/api/v1/apps/${target}/storage/objects/${encodeURIComponent(objectId)}`,
+        { method: 'DELETE', headers }
+      )
+    },
+
+    /** Provider-side copy to a new Hub-generated key (never a SQL-only rename). */
+    copyObject: async (objectId: string, input: HubStorageCopyObjectInput, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<{ object: HubStorageObjectInfo }>>(
+        `/api/v1/apps/${target}/storage/objects/${encodeURIComponent(objectId)}/copy`,
+        { method: 'POST', headers, body: input as any }
+      )
+    },
+
+    /** Create an explicit folder marker so empty folders persist. */
+    createFolder: async (input: HubStorageCreateFolderInput, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<{ folder: HubStorageFolderInfo }>>(
+        `/api/v1/apps/${target}/storage/folders`,
+        { method: 'POST', headers, body: input as any }
+      )
+    },
+
+    /** Soft-delete a folder marker. */
+    deleteFolder: async (input: HubStorageDeleteFolderInput, appId?: string) => {
+      const target = appId || this.appId
+      const headers = await this.appSecretHeaders()
+      return this.request<HubResponse<HubStorageDeleteFolderResult>>(
+        `/api/v1/apps/${target}/storage/folders`,
+        { method: 'DELETE', headers, body: input as any }
+      )
     }
   }
 

@@ -1,7 +1,7 @@
 {
   "name": "tm-hub-client",
-  "version": "1.0.9",
-  "description": "Unified TypeScript SDK for TM-Hub (IAM, Configs, Media, Notifications, Audit Logs & AI Relay)",
+  "version": "1.1.0",
+  "description": "Unified TypeScript SDK for TM-Hub (IAM, Configs, Media, Storage Gateway, Notifications, Audit Logs & AI Relay)",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -22,6 +22,7 @@
     "dev": "tsup --watch",
     "prepublishOnly": "pnpm build",
     "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.mjs\"",
     "login": "npm login",
     "publish": "npm run build && npm publish ./dist",
     "git:cache": "git rm -r --cached . && git add ."
@@ -35,7 +36,8 @@
     "rbac",
     "audit-logs",
     "notifications",
-    "cloudinary"
+    "cloudinary",
+    "storage"
   ],
   "author": "tuanmjnh",
   "license": "MIT",
