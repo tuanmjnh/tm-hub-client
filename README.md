@@ -250,8 +250,60 @@ Multipart upload is not exposed yet (`capabilities.multipartUpload` is `false`).
 
 ---
 
-## Building & Publishing to npm
+---
 
+## Device Registry (v2)
+
+The SDK carries a typed device-identity contract. It does **not** generate or
+hash the device id, read a machine id, or persist any secret — the host owns
+those (Electron Main / browser profile storage).
+
+```ts
+import { createHubClient, type HubDeviceInfo } from 'tm-hub-client'
+
+const device: HubDeviceInfo = {
+  deviceId: myDeviceId,          // from Electron Main (machine-derived) or browser UUID
+  identityKind: 'electron-machine',
+  deviceType: 'desktop',
+  platform: 'desktop',
+  osPlatform: 'win32'
+}
+
+const client = createHubClient({ baseUrl, appId })
+
+// Login: pass the nested device object. Electron Main / server broker only:
+// requestDeviceCredential (never from a renderer).
+const res = await client.auth.login({
+  email, password,
+  device,
+  requestDeviceCredential: true
+})
+// res.data.deviceCredential.secret exists ONCE — store it in OS secure storage
+// in Main, strip it before returning to the renderer.
+```
+
+Self-service and admin device management (identity, not service credentials):
+
+```ts
+client.auth.devices.list({ currentDeviceId: device.deviceId })
+client.auth.devices.get(deviceId)
+client.auth.devices.update(deviceId, { deviceName: 'Home PC' })
+client.auth.devices.revoke(deviceId)
+
+client.auth.adminDevices.list(appId, userId)
+client.auth.adminDevices.update(appId, userId, deviceId, { action: 'block' })
+client.auth.adminDevices.revoke(appId, userId, deviceId)
+
+// P3 RS256 verification — public keys, no auth required. Does not verify tokens.
+const { keys } = await client.auth.jwks()
+```
+
+Route note: `/api/v1/auth/devices*` is the P4 service-credential surface
+(root-only). The identity registry uses `/api/v1/auth/user-devices*`.
+
+---
+
+## Building & Publishing to npm
 ```bash
 # 1. Build dual ESM + CJS bundles and type declarations
 pnpm build

@@ -39,6 +39,101 @@ export interface HubDeviceCredential {
   secret: string
 }
 
+/** Device identity kinds — how the device id was created (v2 Device Registry). */
+export type HubDeviceIdentityKind =
+  | 'electron-machine'
+  | 'electron-installation'
+  | 'browser-profile'
+  | 'native-installation'
+
+export type HubDeviceType =
+  | 'web' | 'mobile' | 'tablet' | 'desktop'
+  | 'tv' | 'wearable' | 'cli' | 'other'
+
+export type HubDevicePlatform = 'web' | 'desktop' | 'mobile'
+
+export type HubDeviceStatus = 'active' | 'pending' | 'blocked' | 'revoked'
+
+/**
+ * Normalized device metadata sent on login (nested `device` object, v2).
+ * The SDK never generates or hashes the device id — the host supplies it from
+ * Electron Main / browser profile storage.
+ */
+export interface HubDeviceInfo {
+  deviceId: string
+  identityKind: HubDeviceIdentityKind
+  deviceType: HubDeviceType
+  platform: HubDevicePlatform
+  deviceName?: string
+  osPlatform?: string
+  arch?: string
+  appVersion?: string
+}
+
+/** A Device Registry record as returned by the Device APIs. Never carries secrets. */
+export interface HubDeviceView {
+  id: string
+  deviceId: string
+  identityKind: HubDeviceIdentityKind
+  deviceType: HubDeviceType
+  platform: string
+  deviceName: string | null
+  osPlatform: string | null
+  arch: string | null
+  appVersion: string | null
+  status: HubDeviceStatus
+  firstSeenAt: string
+  lastSeenAt: string
+  lastIp: string | null
+  isCurrent?: boolean
+}
+
+/**
+ * Transient per-device service credential returned once by login when the host
+ * requested it (`requestDeviceCredential`). Host/Electron Main must persist it
+ * in OS secure storage and must NEVER forward it to a renderer.
+ */
+export interface HubIssuedServiceCredential {
+  deviceId: string
+  secret: string
+  expiresAt: string
+  scopes: string[]
+}
+
+/** Login input. `device` carries the v2 identity; `requestDeviceCredential` is host-only. */
+export interface HubLoginInput {
+  email: string
+  password: string
+  /** Legacy device type field; still accepted by the Hub. */
+  platform?: string
+  /** Legacy top-level device id; still accepted by the Hub. */
+  deviceId?: string
+  /** v2 nested device identity. */
+  device?: HubDeviceInfo
+  /** Electron Main / server broker only. Web clients must not request a credential. */
+  requestDeviceCredential?: boolean
+}
+
+/** Public JWK served by `GET /api/v1/auth/jwks` (RS256 verification). Never has `d`. */
+export interface HubPublicJwk {
+  kty: 'RSA'
+  kid: string
+  alg?: string
+  use?: string
+  n: string
+  e: string
+}
+
+export interface HubJwksResponse {
+  keys: HubPublicJwk[]
+}
+
+/** Result of `auth.login()` / `auth.verifyTotp()` — optional deviceCredential is host-only. */
+export interface HubDeviceAwareAuthResponse extends HubAuthResponse {
+  /** Present only when the host requested it and the app policy allows it. */
+  deviceCredential?: HubIssuedServiceCredential
+}
+
 export type Capability =
   | 'apps.read'
   | 'apps.create'
@@ -141,8 +236,8 @@ export interface HubAuthResponse {
   pendingTotpToken?: string
 }
 
-/** Result of `auth.login()` — check `totpRequired` before using tokens. */
-export type HubLoginResult = HubAuthResponse
+/** Result of `auth.login()` / `auth.verifyTotp()` — optional deviceCredential is host-only. */
+export type HubLoginResult = HubDeviceAwareAuthResponse
 
 export interface HubTotpSetupResponse {
   qrDataUrl: string

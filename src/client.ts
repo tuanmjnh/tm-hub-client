@@ -38,6 +38,10 @@ import type {
   HubAdminPasswordSetResponse,
   HubForgotPasswordRequest,
   HubResetPasswordRequest,
+  HubLoginInput,
+  HubDeviceAwareAuthResponse,
+  HubDeviceView,
+  HubJwksResponse,
   HubOAuthProvider,
   HubOAuthProviderInfo,
   HubOAuthProvidersResponse,
@@ -310,8 +314,8 @@ export class HubClient {
   // MODULE: Auth
   // ==========================================
   public readonly auth = {
-    login: async (credentials: { email: string, password: string, platform?: string }) => {
-      const res = await this.request<HubResponse<HubAuthResponse>>('/api/v1/auth/login', {
+    login: async (credentials: HubLoginInput) => {
+      const res = await this.request<HubResponse<HubDeviceAwareAuthResponse>>('/api/v1/auth/login', {
         method: 'POST',
         body: { ...credentials, appId: this.appId } as any
       })
@@ -534,6 +538,73 @@ export class HubClient {
         method: 'POST',
         body: { provider, code, state, appId: target } as any
       })
+    },
+
+    // ==========================================
+    // JWKS (P3 RS256 — public, no auth required)
+    // ==========================================
+    /**
+     * Fetch the Hub's public JWKS so a satellite can verify RS256 access
+     * tokens by `kid`. This only fetches keys — it does not verify tokens.
+     */
+    jwks: () => {
+      return this.request<HubJwksResponse>('/api/v1/auth/jwks', { method: 'GET' })
+    },
+
+    // ==========================================
+    // Device Registry v2 — self-service (identity, not service credentials)
+    // ==========================================
+    devices: {
+      /** List the caller's registered devices in the current app. */
+      list: (params?: { currentDeviceId?: string }) => {
+        return this.request<HubResponse<HubDeviceView[]>>('/api/v1/auth/user-devices', {
+          method: 'GET',
+          params: params as any
+        })
+      },
+      /** Read one of the caller's devices. */
+      get: (deviceId: string) => {
+        return this.request<HubResponse<HubDeviceView>>(`/api/v1/auth/user-devices/${encodeURIComponent(deviceId)}`, {
+          method: 'GET'
+        })
+      },
+      /** Rename one of the caller's devices (display metadata only). */
+      update: (deviceId: string, patch: { deviceName: string }) => {
+        return this.request<HubResponse<HubDeviceView>>(`/api/v1/auth/user-devices/${encodeURIComponent(deviceId)}`, {
+          method: 'PATCH',
+          body: patch as any
+        })
+      },
+      /** Revoke one of the caller's devices (revokes its sessions + service credential). */
+      revoke: (deviceId: string) => {
+        return this.request<HubResponse<{ id: string }>>(`/api/v1/auth/user-devices/${encodeURIComponent(deviceId)}`, {
+          method: 'DELETE'
+        })
+      }
+    },
+
+    // ==========================================
+    // Device Registry v2 — app admin (capability guarded on the server)
+    // ==========================================
+    adminDevices: {
+      list: (appId: string, userId: string) => {
+        return this.request<HubResponse<HubDeviceView[]>>(
+          `/api/v1/apps/${encodeURIComponent(appId)}/users/${encodeURIComponent(userId)}/user-devices`,
+          { method: 'GET' }
+        )
+      },
+      update: (appId: string, userId: string, deviceId: string, patch: { action: 'approve' | 'block' | 'unblock' | 'revoke', deviceName?: string }) => {
+        return this.request<HubResponse<HubDeviceView>>(
+          `/api/v1/apps/${encodeURIComponent(appId)}/users/${encodeURIComponent(userId)}/user-devices/${encodeURIComponent(deviceId)}`,
+          { method: 'PATCH', body: patch as any }
+        )
+      },
+      revoke: (appId: string, userId: string, deviceId: string) => {
+        return this.request<HubResponse<{ id: string }>>(
+          `/api/v1/apps/${encodeURIComponent(appId)}/users/${encodeURIComponent(userId)}/user-devices/${encodeURIComponent(deviceId)}`,
+          { method: 'DELETE' }
+        )
+      }
     }
   }
 
