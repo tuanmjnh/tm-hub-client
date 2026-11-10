@@ -25,6 +25,18 @@ export interface HubClientOptions {
    * signed-in user. Never ship this to a browser.
    */
   getAppSecret?: () => string | null | undefined | Promise<string | null | undefined>
+  /**
+   * Optional: a per-device credential issued by TM Hub device enrollment
+   * (server only). Sent as X-Device-Id + X-Device-Secret and preferred over
+   * `getAppSecret`, which a public Electron build must not carry.
+   */
+  getDeviceCredential?: () => HubDeviceCredential | null | undefined | Promise<HubDeviceCredential | null | undefined>
+}
+
+/** Pair returned by TM Hub device enrollment (`/api/v1/auth/device/token`). */
+export interface HubDeviceCredential {
+  deviceId: string
+  secret: string
 }
 
 export type Capability =

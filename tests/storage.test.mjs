@@ -227,3 +227,57 @@ test('async getAppSecret is awaited', async () => {
   await client.storage.connections()
   assert.equal(calls[0].headers['x-app-secret'], SECRET)
 })
+
+test('device credential is sent instead of the app secret when both exist', async () => {
+  const calls = []
+  const fetch = async (url, init = {}) => {
+    calls.push({ url, headers: Object.fromEntries(init.headers.entries()) })
+    return new Response(JSON.stringify({ success: true, data: { connections: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  const client = new HubClient({
+    baseUrl: BASE,
+    appId: APP,
+    fetch,
+    getAppSecret: () => SECRET,
+    getDeviceCredential: async () => ({ deviceId: 'dev-1', secret: 'device-secret' })
+  })
+  await client.storage.connections()
+  assert.equal(calls[0].headers['x-device-id'], 'dev-1')
+  assert.equal(calls[0].headers['x-device-secret'], 'device-secret')
+  assert.equal(calls[0].headers['x-app-secret'], undefined)
+})
+
+test('relay uses the device credential too, and falls back without one', async () => {
+  const calls = []
+  const fetch = async (url, init = {}) => {
+    calls.push({ url, headers: Object.fromEntries(init.headers.entries()) })
+    return new Response(JSON.stringify({ success: true, data: { connections: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  const withDevice = new HubClient({ baseUrl: BASE, appId: APP, fetch, getDeviceCredential: () => ({ deviceId: 'dev-1', secret: 'device-secret' }) })
+  await withDevice.ai.relay.catalog()
+  assert.equal(calls[0].headers['x-device-id'], 'dev-1')
+  assert.equal(calls[0].headers['x-app-secret'], undefined)
+
+  const withSecret = new HubClient({ baseUrl: BASE, appId: APP, fetch, getAppSecret: () => SECRET })
+  await withSecret.ai.relay.catalog()
+  assert.equal(calls[1].headers['x-app-secret'], SECRET)
+  assert.equal(calls[1].headers['x-device-id'], undefined)
+})
+
+test('an incomplete device credential falls back to the app secret', async () => {
+  const calls = []
+  const fetch = async (url, init = {}) => {
+    calls.push({ url, headers: Object.fromEntries(init.headers.entries()) })
+    return new Response(JSON.stringify({ success: true, data: { connections: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  const client = new HubClient({
+    baseUrl: BASE,
+    appId: APP,
+    fetch,
+    getAppSecret: () => SECRET,
+    getDeviceCredential: () => ({ deviceId: 'dev-1', secret: '' })
+  })
+  await client.storage.connections()
+  assert.equal(calls[0].headers['x-app-secret'], SECRET)
+  assert.equal(calls[0].headers['x-device-id'], undefined)
+})
